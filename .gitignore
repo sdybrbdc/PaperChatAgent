@@ -1,0 +1,29 @@
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local config / secrets
+.env
+.env.*
+config.yaml
+apps/backend/**/config.yaml
+
+# Frontend
+node_modules/
+dist/
+.pnpm-store/
+
+# Logs / temp
+*.log
+tmp/
+temp/
