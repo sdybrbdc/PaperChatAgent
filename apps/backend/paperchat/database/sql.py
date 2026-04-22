@@ -91,7 +91,7 @@ def ensure_runtime_columns() -> None:
     if "memory_summary_text" not in existing_columns:
         alter_statements.append(
             "ALTER TABLE `paperchat_chat_sessions` "
-            "ADD COLUMN `memory_summary_text` TEXT NOT NULL DEFAULT ''"
+            "ADD COLUMN `memory_summary_text` TEXT NULL"
         )
     if "last_summarized_message_id" not in existing_columns:
         alter_statements.append(
