@@ -31,7 +31,7 @@ def ensure_database_exists() -> None:
     if not url.drivername.startswith("mysql"):
         return
 
-    admin_url = url.set(database=None)
+    admin_url = url.set(database="mysql")
     admin_engine = create_engine(
         admin_url,
         pool_pre_ping=True,
