@@ -74,6 +74,20 @@ V1 使用 `SSE` 处理以下两类实时场景：
 - SSE 更容易与 FastAPI 集成
 - 对前端调试和部署代理更友好
 
+实现约束：
+
+- 聊天主链路采用单请求流式接口：
+  - `POST /conversations/{id}/messages/stream`
+- 聊天流内部由 `LangChain / LangGraph` 负责产生事件流：
+  - `graph.astream(..., stream_mode=["messages", "updates", "custom"], version="v2")`
+- `FastAPI` 仅负责：
+  - 校验权限
+  - 维护 SSE 连接
+  - 将内部流翻译为前端消费的业务事件
+  - 补充 `message.started / message.completed / message.failed / ping`
+- 后台任务流保留 `GET /tasks/{id}/events`
+- 任务事件采用“数据库快照 + Redis Pub/Sub 实时增量”的桥接方式
+
 ## 3.3 前后端数据契约
 
 前端和后端必须围绕统一 DTO/VO 契约开发，不能让前端自行拼装后端返回结构。
@@ -83,6 +97,10 @@ V1 使用 `SSE` 处理以下两类实时场景：
 - 后端返回稳定的页面消费对象，不让前端自行猜字段
 - 前端 Pinia store 直接消费 DTO，不在组件里临时重组
 - 消息、任务、工作区、知识库等核心资源统一使用 `id + status + timestamps + metadata` 的基础结构
+- 成功响应统一为：
+  - `code + message + data + request_id`
+- 失败响应统一为：
+  - `code + message + details + request_id`
 
 推荐首批对齐的数据对象如下：
 
@@ -92,6 +110,7 @@ V1 使用 `SSE` 处理以下两类实时场景：
 | `InboxConversationDTO` | `/conversations/inbox` | `inbox_conversations` | 默认收件箱会话 |
 | `ChatSessionDTO` | `/conversations/*` | `chat_sessions` | 会话容器 |
 | `MessageDTO` | `/conversations/{id}/messages` | `messages` | 聊天消息 |
+| `ChatStreamEventDTO` | `/conversations/{id}/messages/stream` | LangGraph stream + SSE adapter | 聊天流式业务事件 |
 | `TaskSuggestionDTO` | `messages.message_type=task_suggestion` | `messages` | 任务建议消息 |
 | `ResearchWorkspaceDTO` | `/workspaces/*` | `research_workspaces` | 工作区信息 |
 | `KnowledgeBaseDTO` | `/knowledge` | `knowledge_bases` | 知识库容器 |
@@ -104,6 +123,10 @@ V1 使用 `SSE` 处理以下两类实时场景：
 
 前端组件层不应直接依赖数据库字段名，而应依赖 DTO 名称。
 
+完整接口契约见：
+
+- [API Contract V1](./api-contract-v1.md)
+
 ## 4. 聊天层技术路线
 
 聊天层明确参考 AgentChat 的实现方式，但按 PaperChatAgent 的业务语义重新组织资源。
@@ -111,6 +134,7 @@ V1 使用 `SSE` 处理以下两类实时场景：
 固定设计：
 
 - 使用 LangChain 作为聊天模型与 RAG 编排基础层
+- 使用 LangGraph 组织轻量聊天图，而不是在 FastAPI 路由里直接手写 token 流
 - 模型实例通过 LangChain `ChatOpenAI` 风格对象统一创建
 - 保留 AgentChat 的多模型配置思想：
   - `conversation_model`
@@ -123,6 +147,10 @@ V1 使用 `SSE` 处理以下两类实时场景：
   - 混合检索
   - 重排序
   - 注入问答上下文
+- 聊天图默认拆为三个节点：
+  - `load_context`
+  - `maybe_retrieve_context`
+  - `call_model`
 
 聊天服务建议分层：
 
@@ -130,6 +158,22 @@ V1 使用 `SSE` 处理以下两类实时场景：
 - `langchain model manager`
 - `rag handler`
 - `stream service`
+
+聊天流职责边界：
+
+- `LangGraph / LangChain`：
+  - 产生 `messages / updates / custom` 内部流
+- `stream service`：
+  - 将内部流映射为业务事件：
+    - `message.delta`
+    - `message.progress`
+    - `message.tool`
+    - `message.info`
+- `FastAPI SSE route`：
+  - 负责发送 `event:` + `data:`
+  - 发送心跳
+  - 处理客户端断开
+  - 补充 `message.started / message.completed / message.failed`
 
 ### 4.2 前端聊天实现细节
 
@@ -151,11 +195,11 @@ V1 使用 `SSE` 处理以下两类实时场景：
 Pinia 建议拆分以下 store：
 
 - `authStore`
-  - 当前用户、登录态、登出
+  - 当前用户、恢复登录态、登出
 - `workspaceStore`
   - 工作区列表、当前工作区、分享信息
 - `conversationStore`
-  - 收件箱会话、当前会话、消息列表、SSE 流
+  - 收件箱会话、当前会话、消息列表、assistant draft、SSE 流
 - `knowledgeStore`
   - 知识库、文件上传状态、绑定关系
 - `taskStore`
@@ -191,17 +235,25 @@ Pinia 建议拆分以下 store：
 
 ## 5. 认证方案
 
-认证参考 AgentChat 当前做法：
-
-- JWT 支持 `cookies + headers`
-- Web 场景默认采用 `HttpOnly Cookie`
-- 保留 Header 传 token 的兼容能力
+认证吸收 AgentChat “同时支持 cookies + headers”的能力，但冻结浏览器正式链路为 `Cookie 优先`。
 
 V1 推荐策略：
 
-- 登录成功后，服务端写入 HttpOnly Cookie
-- 前端以浏览器会话为主，不在页面逻辑中广泛暴露原始 token
-- 对需要兼容脚本或特殊调用的场景，允许 Header 形式
+- 登录成功后，服务端写入 access / refresh `HttpOnly Cookie`
+- 前端通过 `GET /me` 恢复登录态，不在浏览器主链路持久化 access token
+- 普通 JSON API 统一开启 `withCredentials: true`
+- SSE 请求统一开启 `credentials: "include"`
+- 对脚本或特殊调用场景，保留 Header 传 token 兼容能力
+- 后端保护接口同时支持：
+  - cookie
+  - `Authorization: Bearer <token>`
+
+默认参数：
+
+- access token：15 分钟
+- refresh token：30 天
+- `SameSite=Lax`
+- 生产环境 `Secure=true`
 
 V1 不做：
 
@@ -483,6 +535,7 @@ apps/frontend/
 
 - `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/refresh`
 - `POST /auth/logout`
 - `GET /me`
 
@@ -490,8 +543,7 @@ apps/frontend/
 
 - `GET /conversations/inbox`
 - `GET /conversations/{id}/messages`
-- `POST /conversations/{id}/messages`
-- `GET /conversations/{id}/stream`
+- `POST /conversations/{id}/messages/stream`
 
 ### 12.3 Workspace
 
@@ -581,6 +633,7 @@ apps/frontend/
 接口：
 
 - `POST /auth/login`
+- `POST /auth/refresh`
 
 后端行为：
 
@@ -596,8 +649,9 @@ apps/frontend/
 
 实现约束：
 
-- `GET /me` 用于前端刷新登录态
+- `GET /me` 用于前端恢复登录态
 - 登出时需要吊销或标记 `user_sessions.revoked_at`
+- `POST /auth/refresh` 使用 refresh cookie 续期登录会话
 
 ### 14.3 打开默认聊天页
 
@@ -621,26 +675,44 @@ apps/frontend/
 
 接口：
 
-- `POST /conversations/{id}/messages`
-- `GET /conversations/{id}/stream`
+- `POST /conversations/{id}/messages/stream`
 
 处理路径：
 
 1. 前端提交用户消息
 2. 后端写入一条 `messages(role=user, message_type=chat)`
-3. Chat service 调用 LangChain conversation model
-4. 若当前会话已绑定工作区，则额外走 RAG：
+3. Chat service 构建轻量 LangGraph chat graph：
+   - `load_context`
+   - `maybe_retrieve_context`
+   - `call_model`
+4. 若当前会话已绑定工作区，则在图内额外走 RAG：
    - query rewrite
    - retrieval
    - rerank
    - context injection
-5. 将 AI 回复流式返回前端
-6. AI 回复完成后写入一条 `messages(role=assistant, message_type=chat 或 task_suggestion)`
+5. 图内通过 `graph.astream(..., stream_mode=["messages", "updates", "custom"], version="v2")` 产生内部流
+6. FastAPI SSE 层将内部流翻译为业务事件：
+   - `message.started`
+   - `message.delta`
+   - `message.progress`
+   - `message.tool`
+   - `message.info`
+   - `message.completed`
+   - `message.failed`
+   - `ping`
+7. AI 回复完成后一次性写入正式 assistant 消息
+8. 若回复属于任务建议，则写入 `message_type=task_suggestion`
 
 此阶段目标：
 
 - 帮用户把研究问题收束为可执行研究任务
 - 允许用户上传 PDF 并参与上下文
+
+持久化约束：
+
+- assistant 消息不做占位消息更新
+- 若流失败，不写半成品 assistant 消息
+- 引用依据仅在 `message.completed` 后写入 `citation_evidences`
 
 ### 14.5 上传论文 / 资料
 
@@ -791,14 +863,29 @@ apps/frontend/
 
 SSE 事件建议至少包含：
 
+- `task.snapshot`
 - `task.created`
 - `task.node.started`
 - `task.node.completed`
 - `task.node.failed`
+- `task.progress`
 - `task.completed`
 - `task.failed`
+- `task.canceled`
 
 前端任务页与聊天页都可订阅这条流。
+
+实现约束：
+
+1. SSE 连接建立后先读取数据库并发送当前任务快照
+2. 再桥接 Redis Pub/Sub 实时事件
+3. 事件载荷至少包含：
+   - `task_id`
+   - `status`
+   - `current_node`
+   - `progress_percent`
+   - `detail`
+   - `occurred_at`
 
 ### 14.11 工作流完成后的回流问答
 
