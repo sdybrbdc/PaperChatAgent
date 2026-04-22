@@ -3,12 +3,14 @@
 PaperChatAgent 是一个面向科研人员和学生的论文调研工作台。  
 它以聊天为入口，以研究工作区为沉淀对象，以研究任务为执行单元，目标是把“研究方向澄清、论文检索、文献阅读、分析归纳、报告产出、结果回流问答”组织成一套可持续使用的工作流。
 
-当前仓库处于 **开发前期 + 前端第一阶段**：
+当前仓库已经进入 **前后端骨架联调阶段**：
 
 - 产品需求、技术文档、数据库设计已成型
 - 设计稿已完成白色主主题与两套备选主题
-- 前端已搭好白色主主题的静态工作台页面
-- 后端、Worker、真实工作流与真实接口尚未开始实现
+- 前端已搭好白色主主题工作台页面，并接入部分真实后端资源接口
+- 后端已实现认证、聊天、任务、知识库、Agents API 与研究工作流骨架
+- 研究工作流已落地为 `LangGraph + AutoGen Team` 的五节点实现
+- Worker 仍处于占位阶段，尚未接入真实队列消费
 
 ## 当前预览
 
@@ -55,6 +57,8 @@ PaperChatAgent 当前聚焦以下方向：
 - 双层知识库：账号级全局知识库 + 工作区私有知识库
 - 后台任务驱动：研究流程异步执行，前端只负责展示与跟踪
 - 完整研究工作流：搜索、阅读、分析、写作、报告、回流问答
+- 多智能体子链：分析阶段包含 `cluster / deep_analyse / global_analyse`，写作阶段包含 `writing_director / retrieval / writing / review`
+- AutoGen Team 写作协作：章节级写作采用 `SelectorGroupChat + FunctionTool + TextMentionTermination`
 - 引用式问答：回答可关联论文与片段级引用依据
 
 ## 当前进度
@@ -68,16 +72,23 @@ PaperChatAgent 当前聚焦以下方向：
 - 登录页 / 注册页 / 默认聊天页 / 知识库页 / 智能体页 / 后台任务页设计稿
 - 前端白色主主题静态实现
 - Mock 登录、路由守卫、Pinia 基础状态管理
+- FastAPI 后端应用入口、配置加载、数据库初始化
+- 认证、会话、聊天流、任务、知识库、工作区、Agents API
+- LangChain 聊天图与会话级长期摘要
+- 五节点研究工作流：`search -> reading -> analyse -> writing -> report`
+- 分析子 Agent 与写作子 Agent 运行时
+- AutoGen Team 写作协作链与任务进度回传
+- 任务报告产物与节点状态内存态保存
 
 ### 未完成
 
-- FastAPI 后端骨架
-- MySQL / Redis / MinIO / ChromaDB 服务接入
-- LangChain 聊天层实现
-- AutoGen + LangGraph 完整工作流
-- 真实接口联调
-- SSE 聊天与任务进度流
-- 文件上传与知识入库
+- Worker 真实队列消费与跨进程任务执行
+- `workflow_runs / workflow_node_runs / report_artifacts` 等正式持久化表落库
+- ChromaDB / 更完整知识库检索接入
+- 研究任务中间结果持久化与可回放
+- 前端与任务页 / 智能体页 / 聊天页的完整真实联调
+- 搜索、阅读、报告节点进一步统一到 AutoGen `run_stream()` 风格
+- HITL 人工审核链路接回前端
 
 ## V1 核心能力范围
 
@@ -94,18 +105,16 @@ PaperChatAgent 当前聚焦以下方向：
 
 `登录 -> 默认聊天 -> 澄清需求/上传资料 -> AI 建议研究任务 -> 用户确认 -> 创建工作区 -> 后台执行 -> 结果回流问答`
 
-## 当前前端阶段说明
+## 当前阶段说明
 
-前端当前采用“**白色主主题 + 静态页为主**”的推进方式：
+当前仓库处于“**前端静态体验 + 后端真实资源骨架**”并行推进阶段：
 
 - 登录页和注册页可直接打开使用
-- 登录采用本地 mock：
-  - 用户名 / 邮箱：`sdybdc`
-  - 密码：`226113`
-- 工作台页面以 mock 数据驱动
-- 目前不接真实后端 API
+- 登录支持本地 mock，也已具备真实后端认证接口
+- 默认聊天、任务、知识库、智能体相关后端接口已经可运行
+- 研究任务已能触发真实工作流骨架，而不是纯演示进度条
+- 前端仍以工作台体验和联调准备为主，尚未完成全链路真实接入
 - 目前不做移动端适配
-- 目前不实现真实 SSE 聊天流和任务进度流
 
 ## 技术栈
 
@@ -118,7 +127,7 @@ PaperChatAgent 当前聚焦以下方向：
 - Element Plus
 - Axios
 
-### 后端规划
+### 后端
 
 - FastAPI
 - LangChain
@@ -128,6 +137,23 @@ PaperChatAgent 当前聚焦以下方向：
 - Redis
 - MinIO
 - ChromaDB
+
+## 当前后端能力
+
+当前 `apps/backend` 已实现以下能力：
+
+- `Auth`：注册、登录、刷新、恢复登录态
+- `Conversations`：会话列表、消息列表、SSE 聊天流
+- `Tasks`：任务创建、任务列表、任务详情、任务报告、任务事件流
+- `Knowledge`：文件上传、arXiv 导入、资料挂接
+- `Agents`：默认研究工作流定义、节点定义、按任务查看节点运行态
+- `Workflows`：五节点研究工作流和分析/写作子 Agent 运行时
+
+其中研究工作流当前采用：
+
+- 外层：`LangGraph`
+- 分析节点：`cluster_agent -> deep_analyse_agent -> global_analyse_agent`
+- 写作节点：`writing_director_agent -> SelectorGroupChat(writing_agent, retrieval_agent, review_agent)`
 
 ## 文档索引
 
@@ -199,6 +225,22 @@ pnpm build
 
 - `apps/frontend`
 
+### 后端本地运行
+
+```bash
+cd apps/backend
+uv sync
+cp paperchat/config.example.yaml paperchat/config.yaml
+uv run uvicorn paperchat.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+默认地址：
+
+- API: `http://127.0.0.1:8000/api/v1`
+- Swagger: `http://127.0.0.1:8000/swagger`
+
+当前后端启动时会自动初始化数据库基础表，但研究工作流的中间结果目前仍主要保存在内存态 store 中。
+
 ## 目录结构
 
 更新约定：
@@ -223,7 +265,7 @@ PaperChatAgent/
 │   │   ├── package.json                   # 前端依赖定义
 │   │   ├── pnpm-lock.yaml                 # 前端锁文件
 │   │   └── vite.config.ts                 # Vite 配置
-│   ├── backend/                           # FastAPI 主服务（待实现）
+│   ├── backend/                           # FastAPI 主服务（已实现基础 API 与研究工作流骨架）
 │   │   └── paperchat/
 │   │       ├── main.py                    # 后端应用入口
 │   │       ├── settings.py                # 配置加载入口
@@ -254,7 +296,7 @@ PaperChatAgent/
 │   │       ├── tasks/                     # 后台任务入口与调度封装
 │   │       ├── schemas/                   # Pydantic 请求/响应模型
 │   │       └── providers/                 # LangChain / 模型供应商抽象
-│   └── worker/                            # 独立后台执行器（待实现）
+│   └── worker/                            # 独立后台执行器（当前仍为占位骨架）
 │       └── paperchat_worker/
 │           ├── main.py                    # worker 入口
 │           ├── consumers/                 # 队列消费者
@@ -295,9 +337,9 @@ PaperChatAgent/
 
 如果继续往下推进，推荐顺序是：
 
-1. 补 `apps/backend` 骨架
-2. 新建 `config.example.yaml`
-3. 补 `docker-compose.yml`
-4. 先实现认证接口
-5. 再联调前端登录页
-6. 然后接默认聊天页和工作台基础资源接口
+1. 把任务运行时从内存态迁到正式表结构
+2. 为 worker 接入 Redis 队列消费，切断 API 进程内 `create_task` 执行
+3. 接通 ChromaDB 与更完整的知识检索
+4. 联调前端聊天页、任务页、智能体页真实接口
+5. 接回 search 节点的人审代理与前端交互
+6. 再补 docker compose 和一键本地开发环境
