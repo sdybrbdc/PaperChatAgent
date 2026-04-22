@@ -3,9 +3,11 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import AuthInfoCard from '../../components/auth/AuthInfoCard.vue'
+import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
+const authStore = useAuthStore()
 
 const form = reactive({
   displayName: '',
@@ -41,7 +43,12 @@ async function handleRegister() {
     return
   }
 
-  ElMessage.success('Mock 阶段，账号未实际写入后端')
+  await authStore.register({
+    displayName: form.displayName,
+    email: form.email,
+    password: form.password,
+  })
+  ElMessage.success('注册成功，请登录')
   await router.push('/login')
 }
 </script>

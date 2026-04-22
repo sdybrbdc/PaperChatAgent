@@ -11,12 +11,12 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 
 const form = reactive({
-  account: '',
+  email: '',
   password: '',
 })
 
 const rules: FormRules<typeof form> = {
-  account: [{ required: true, message: '请输入用户名或邮箱', trigger: 'blur' }],
+  email: [{ required: true, message: '请输入邮箱', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
@@ -60,8 +60,8 @@ async function handleLogin() {
     <p>使用邮箱和密码登录，继续你的论文调研与研究工作流。</p>
 
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
-      <el-form-item label="邮箱 / 用户名" prop="account">
-        <el-input v-model="form.account" placeholder="sdybdc" />
+      <el-form-item label="邮箱" prop="email">
+        <el-input v-model="form.email" placeholder="name@example.com" />
       </el-form-item>
       <el-form-item label="密码" prop="password">
         <el-input v-model="form.password" type="password" show-password placeholder="请输入密码" />

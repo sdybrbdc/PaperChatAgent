@@ -3,12 +3,15 @@ export interface InboxConversationDTO {
   title: string
   status: 'active' | 'archived'
   summary: string
+  lastMessageAt?: string | null
 }
 
 export interface ChatSessionDTO {
   id: string
   title: string
   scope: 'inbox' | 'workspace'
+  status?: 'active' | 'archived'
+  lastMessageAt?: string | null
 }
 
 export interface MessageDTO {
@@ -16,7 +19,10 @@ export interface MessageDTO {
   role: 'user' | 'assistant' | 'system'
   messageType: 'chat' | 'task_suggestion' | 'system_notice'
   content: string
+  metadata?: Record<string, unknown>
+  citations?: Array<Record<string, unknown>>
   createdAt: string
+  isDraft?: boolean
 }
 
 export interface TaskSuggestionDTO {
@@ -34,4 +40,17 @@ export interface ConversationHistoryGroup {
   subtitle?: string
   items?: string[]
   type?: 'inbox' | 'workspace'
+}
+
+export interface ChatStreamEventDTO {
+  event:
+    | 'message.started'
+    | 'message.delta'
+    | 'message.progress'
+    | 'message.tool'
+    | 'message.info'
+    | 'message.completed'
+    | 'message.failed'
+    | 'ping'
+  data: Record<string, unknown>
 }

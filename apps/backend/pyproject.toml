@@ -1,0 +1,26 @@
+[project]
+name = "paperchat-backend"
+version = "0.1.0"
+description = "PaperChatAgent FastAPI backend skeleton"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30,<1.0",
+  "pydantic>=2.8,<3.0",
+  "pydantic-settings>=2.4,<3.0",
+  "email-validator>=2.2,<3.0",
+  "python-multipart>=0.0.9,<1.0",
+  "PyJWT>=2.9,<3.0",
+  "PyYAML>=6.0,<7.0",
+  "SQLAlchemy>=2.0,<3.0",
+  "pymysql>=1.1,<2.0",
+  "redis>=5.2,<6.0",
+  "minio>=7.2,<8.0",
+  "httpx>=0.28,<1.0",
+  "langchain-core>=0.3,<0.4",
+  "langgraph>=0.2.60,<0.3",
+  "langchain-openai>=0.2,<0.4",
+]
+
+[tool.uv]
+package = true

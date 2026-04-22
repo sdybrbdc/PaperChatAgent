@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import MessageBubble from '../../components/chat/MessageBubble.vue'
 import TaskSuggestionCard from '../../components/chat/TaskSuggestionCard.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
@@ -11,6 +12,17 @@ const conversationStore = useConversationStore()
 onMounted(() => {
   conversationStore.load()
 })
+
+async function handleSend() {
+  try {
+    await conversationStore.sendCurrentMessage()
+    if (conversationStore.errorMessage) {
+      ElMessage.error(conversationStore.errorMessage)
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '发送失败')
+  }
+}
 </script>
 
 <template>
@@ -37,12 +49,23 @@ onMounted(() => {
         </div>
         <div class="composer">
           <el-button>上传 PDF</el-button>
-          <div class="composer-input">输入研究问题，或继续补充论文、关键词、研究边界...</div>
-          <el-button type="primary">发送</el-button>
+          <el-input
+            v-model="conversationStore.composerText"
+            type="textarea"
+            :rows="2"
+            class="composer-input"
+            placeholder="输入研究问题，或继续补充论文、关键词、研究边界..."
+          />
+          <el-button type="primary" :loading="conversationStore.isStreaming" @click="handleSend">发送</el-button>
         </div>
       </div>
 
       <aside class="rail">
+        <RightRailCard
+          v-if="conversationStore.streamEvents.length"
+          title="实时流式状态"
+          :lines="conversationStore.streamEvents"
+        />
         <template v-if="conversationStore.railCards.length">
           <RightRailCard
             v-for="card in conversationStore.railCards"

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@microsoft/fetch-event-source": "^2.0.1",
     "axios": "^1.15.1",
     "element-plus": "^2.13.7",
     "pinia": "^3.0.4",

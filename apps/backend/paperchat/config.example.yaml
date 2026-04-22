@@ -1,0 +1,76 @@
+server:
+  name: "PaperChatAgent Backend"
+  version: "0.1.0"
+  host: "127.0.0.1"
+  port: 8000
+  env: "dev"
+
+auth:
+  secret_key: "paperchat-dev-secret-key-with-32-chars"
+  access_token_ttl_seconds: 900
+  refresh_token_ttl_seconds: 2592000
+  access_cookie_name: "paperchat_access_token"
+  refresh_cookie_name: "paperchat_refresh_token"
+  cookie_secure: false
+  cookie_samesite: "lax"
+
+mysql:
+  endpoint: "mysql+pymysql://user:password@127.0.0.1:3306/paperchatagent"
+  async_endpoint: "mysql+aiomysql://user:password@127.0.0.1:3306/paperchatagent"
+
+redis:
+  endpoint: "redis://localhost:6379"
+
+vector_db:
+  host: "127.0.0.1"
+  port: "19530"
+  mode: "chroma"
+
+storage:
+  mode: "minio"
+  oss:
+    access_key_id: "your-oss-access-key-id"
+    access_key_secret: "your-oss-access-key-secret"
+    endpoint: "oss-cn-beijing.aliyuncs.com"
+    bucket_name: "paperchatagent"
+    base_url: "https://your-bucket.oss-cn-beijing.aliyuncs.com"
+  minio:
+    access_key_id: "admin"
+    access_key_secret: "admin123"
+    endpoint: "127.0.0.1:9000"
+    bucket_name: "paperchatagent"
+    base_url: "http://127.0.0.1:9000/paperchatagent"
+
+cors_origins:
+  - "http://127.0.0.1:5173"
+  - "http://localhost:5173"
+
+multi_models:
+  conversation_model:
+    api_key: "your-conversation-api-key"
+    base_url: "https://your-openai-compatible-endpoint/v1"
+    model_name: "gpt-4o-mini"
+  tool_call_model:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model_name: "qwen-plus"
+  reasoning_model:
+    api_key: "your-reasoning-api-key"
+    base_url: "https://api.deepseek.com/v1"
+    model_name: "deepseek-reasoner"
+  text2image:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+    model_name: "wanx2.0-t2i-turbo"
+  qwen_vl:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model_name: "qwen-vl-plus"
+  embedding:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model_name: "text-embedding-v4"
+  rerank:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
+    model_name: "gte-rerank-v2"

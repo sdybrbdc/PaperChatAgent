@@ -1,53 +1,54 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { CurrentUserDTO, LoginPayload } from '../types/auth'
-import { loginWithMock } from '../apis/auth'
-
-const STORAGE_KEY = 'paperchatagent.auth'
-
-interface StoredAuth {
-  user: CurrentUserDTO
-  token: string
-}
+import type { CurrentUserDTO, LoginPayload, RegisterPayload } from '../types/auth'
+import { getCurrentUser, login, logout as logoutRequest, registerAccount } from '../apis/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<CurrentUserDTO | null>(null)
-  const token = ref('')
+  const restoreState = ref<'idle' | 'loading' | 'done'>('idle')
 
-  const isAuthenticated = computed(() => Boolean(currentUser.value && token.value))
+  const isAuthenticated = computed(() => Boolean(currentUser.value))
 
-  function hydrateFromStorage() {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
+  async function restoreSession(force = false) {
+    if (restoreState.value === 'loading') return
+    if (!force && restoreState.value === 'done') return
 
+    restoreState.value = 'loading'
     try {
-      const parsed = JSON.parse(raw) as StoredAuth
-      currentUser.value = parsed.user
-      token.value = parsed.token
+      currentUser.value = await getCurrentUser()
     } catch {
-      localStorage.removeItem(STORAGE_KEY)
+      currentUser.value = null
+    } finally {
+      restoreState.value = 'done'
     }
   }
 
-  async function login(payload: LoginPayload) {
-    const session = await loginWithMock(payload)
+  async function loginWithSession(payload: LoginPayload) {
+    const session = await login(payload)
     currentUser.value = session.user
-    token.value = session.token
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+    restoreState.value = 'done'
   }
 
-  function logout() {
-    currentUser.value = null
-    token.value = ''
-    localStorage.removeItem(STORAGE_KEY)
+  async function register(payload: RegisterPayload) {
+    await registerAccount(payload)
+  }
+
+  async function logout() {
+    try {
+      await logoutRequest()
+    } finally {
+      currentUser.value = null
+      restoreState.value = 'done'
+    }
   }
 
   return {
     currentUser,
-    token,
+    restoreState,
     isAuthenticated,
-    hydrateFromStorage,
-    login,
+    restoreSession,
+    login: loginWithSession,
+    register,
     logout,
   }
 })

@@ -39,9 +39,9 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
-  authStore.hydrateFromStorage()
+  await authStore.restoreSession()
 
   const isAuthenticated = authStore.isAuthenticated
 

@@ -1,0 +1,11 @@
+[project]
+name = "paperchat-worker"
+version = "0.1.0"
+description = "PaperChatAgent worker skeleton"
+requires-python = ">=3.11"
+dependencies = [
+  "anyio>=4.4,<5.0",
+]
+
+[tool.uv]
+package = true
