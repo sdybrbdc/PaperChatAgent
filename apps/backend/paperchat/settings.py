@@ -18,7 +18,7 @@ class ServerSettings(BaseModel):
 
 class AuthSettings(BaseModel):
     secret_key: str = "paperchat-dev-secret-key-with-32-chars"
-    access_token_ttl_seconds: int = 15 * 60
+    access_token_ttl_seconds: int = 24 * 60 * 60
     refresh_token_ttl_seconds: int = 30 * 24 * 60 * 60
     access_cookie_name: str = "paperchat_access_token"
     refresh_cookie_name: str = "paperchat_refresh_token"

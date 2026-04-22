@@ -7,7 +7,7 @@ server:
 
 auth:
   secret_key: "paperchat-dev-secret-key-with-32-chars"
-  access_token_ttl_seconds: 900
+  access_token_ttl_seconds: 86400
   refresh_token_ttl_seconds: 2592000
   access_cookie_name: "paperchat_access_token"
   refresh_cookie_name: "paperchat_refresh_token"

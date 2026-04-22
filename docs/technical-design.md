@@ -250,7 +250,7 @@ V1 推荐策略：
 
 默认参数：
 
-- access token：15 分钟
+- access token：1 天
 - refresh token：30 天
 - `SameSite=Lax`
 - 生产环境 `Secure=true`

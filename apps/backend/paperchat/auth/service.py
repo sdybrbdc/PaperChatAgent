@@ -83,8 +83,18 @@ def create_refresh_token(user_id: str, session_id: str, settings: AppSettings) -
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, settings: AppSettings) -> None:
     cookie_kwargs = _cookie_kwargs(settings)
-    response.set_cookie(settings.auth.access_cookie_name, access_token, **cookie_kwargs)
-    response.set_cookie(settings.auth.refresh_cookie_name, refresh_token, **cookie_kwargs)
+    response.set_cookie(
+        settings.auth.access_cookie_name,
+        access_token,
+        max_age=settings.auth.access_token_ttl_seconds,
+        **cookie_kwargs,
+    )
+    response.set_cookie(
+        settings.auth.refresh_cookie_name,
+        refresh_token,
+        max_age=settings.auth.refresh_token_ttl_seconds,
+        **cookie_kwargs,
+    )
 
 
 def clear_auth_cookies(response: Response, settings: AppSettings) -> None:
