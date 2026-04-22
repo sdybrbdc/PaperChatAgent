@@ -21,7 +21,7 @@
 
 ### 2.2 InboxConversation
 
-表示默认收件箱会话，是用户进入系统后的默认研究起点。
+表示用户的默认容器，用于承接初始会话，不直接作为聊天前端主对象。
 
 建议字段：
 
@@ -35,7 +35,7 @@
 说明：
 
 - 每个用户默认至少有一个 `InboxConversation`
-- 在研究方向明确前，聊天记录优先沉淀于此
+- 新创建的聊天会话默认可挂在该容器下
 
 ### 2.3 ResearchWorkspace
 
@@ -55,7 +55,7 @@
 
 ### 2.4 ChatSession
 
-表示会话容器，可归属在收件箱或工作区内。
+表示聊天主对象，是用户实际感知和切换的“最近会话”。
 
 建议字段：
 
@@ -64,12 +64,16 @@
 - `workspace_id`（可空）
 - `inbox_conversation_id`（可空）
 - `title`
+- `memory_summary_text`
+- `last_summarized_message_id`
 - `created_at`
 - `updated_at`
 
 约束：
 
 - `workspace_id` 与 `inbox_conversation_id` 至少有一个存在
+- 当前聊天主流程仅依赖 `ChatSession`
+- 长短期记忆都按 `ChatSession` 隔离
 
 ### 2.5 Message
 
@@ -205,15 +209,15 @@
 
 ## 3. 核心关系
 
-## 3.1 InboxConversation -> ResearchWorkspace
+## 3.1 InboxConversation -> ChatSession
 
-`InboxConversation` 可以转化为 `ResearchWorkspace` 的上下文来源。
+`InboxConversation` 作为系统默认容器存在，但前端主体验围绕 `ChatSession` 展开。
 
 实现约束：
 
-- 工作区创建时可记录 `origin_inbox_conversation_id`
-- 原始会话不删除
-- 后续研究内容可以迁移或关联到工作区内的新 `ChatSession`
+- 用户进入系统后至少拥有一个默认 `ChatSession`
+- 用户可继续创建多个新的 `ChatSession`
+- 最近会话列表按 `ChatSession.updated_at` 展示
 
 ## 3.2 全局知识库 + 工作区私有知识库
 
@@ -234,11 +238,11 @@
 - 一个 `ResearchTask` 在成功完成后，可以生成一个或多个 `TopicExplorationPackage`
 - V1 默认按“每个任务产出一个主探索包”组织
 
-## 3.4 TopicExplorationPackage -> 后续问答上下文
+## 3.4 ChatSession -> 会话级记忆
 
-- 问答时，系统可基于工作区绑定的 `TopicExplorationPackage` 进行检索增强
-- `TopicExplorationPackage` 不直接等同于消息，而是后续回答的上下文来源
-- 当完整工作流执行到报告节点后，`TopicExplorationPackage` 可同时承载报告摘要和引用上下文
+- 短期记忆来自当前会话最近消息窗口
+- 长期记忆来自 `ChatSession.memory_summary_text`
+- 不同会话之间不共享记忆
 
 ## 3.5 分享链接
 
@@ -350,6 +354,7 @@ failed -> parsing   # retry
 - `inbox_conversations`
 - `chat_sessions`
 - `messages`
+- `session_memories`（若不直接复用 `chat_sessions` 字段）
 
 ### 6.3 工作区与分享
 

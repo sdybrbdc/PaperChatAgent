@@ -215,14 +215,68 @@
 }
 ```
 
-## 4. Inbox / Chat
+## 4. Chat
 
-### 4.1 `GET /conversations/inbox`
+### 4.1 `GET /conversations`
 
 用途：
 
-- 返回当前用户的默认收件箱容器
-- 返回默认聊天页首屏需要的当前会话信息
+- 返回当前用户最近会话列表
+
+成功响应：
+
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "title": "新聊天",
+        "scope": "inbox",
+        "status": "active",
+        "last_message_at": "2026-04-22T10:00:00Z",
+        "updated_at": "2026-04-22T10:00:00Z",
+        "last_message_preview": "最近一条消息摘要"
+      }
+    ]
+  },
+  "request_id": "trace-id"
+}
+```
+
+### 4.2 `POST /conversations`
+
+用途：
+
+- 创建一个新的聊天会话
+
+成功响应：
+
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "id": "uuid",
+    "title": "新聊天",
+    "scope": "inbox",
+    "status": "active",
+    "last_message_at": null,
+    "updated_at": "2026-04-22T10:00:00Z",
+    "last_message_preview": ""
+  },
+  "request_id": "trace-id"
+}
+```
+
+### 4.3 `GET /conversations/inbox`
+
+用途：
+
+- 返回当前用户的默认容器与首个会话
+- 仅作为兼容接口保留，聊天前端不再主依赖
 
 成功响应：
 
@@ -250,7 +304,7 @@
 }
 ```
 
-### 4.2 `GET /conversations/{id}/messages`
+### 4.4 `GET /conversations/{id}/messages`
 
 用途：
 
@@ -289,7 +343,7 @@
 }
 ```
 
-### 4.3 `POST /conversations/{id}/messages/stream`
+### 4.5 `POST /conversations/{id}/messages/stream`
 
 用途：
 
@@ -353,10 +407,10 @@
 {
   "event": "message.progress",
   "data": {
-    "stage": "retrieve",
+    "stage": "context",
     "node": "maybe_retrieve_context",
-    "status": "running",
-    "detail": "正在检索工作区上下文"
+    "status": "completed",
+    "detail": "当前无额外上下文检索"
   }
 }
 ```
@@ -368,8 +422,8 @@
   "event": "message.tool",
   "data": {
     "status": "started",
-    "tool": "retrieve_workspace_context",
-    "detail": "开始检索主题探索包"
+    "tool": "context_loader",
+    "detail": "正在整理当前会话上下文"
   }
 }
 ```
@@ -440,6 +494,9 @@
 - 仅在 `message.completed` 后写正式 assistant 消息
 - 若流失败，不写半成品 assistant 消息
 - 引用依据仅在 `message.completed` 后写入 `citation_evidences`
+- 记忆范围仅限当前会话：
+  - 短期记忆来自最近消息窗口
+  - 长期记忆来自当前会话摘要
 
 ## 5. Task Events
 

@@ -200,24 +200,28 @@ V1 使用 `SSE` 处理以下两类实时场景：
 - `ChatPage`
   - 页面容器，负责布局和路由入口
 - `ConversationSidebar`
-  - 左侧工作区/会话分组
+  - 左侧最近会话列表
 - `MessageList`
   - 消息列表
 - `Composer`
   - 输入框、上传按钮、发送按钮
-- `TaskSuggestionCard`
-  - 结构化任务建议渲染
-- `TaskConfirmDrawer` 或 `TaskConfirmPanel`
-  - 任务确认面板
+- `NewConversationButton`
+  - 新聊天入口
+
+聊天页布局约束：
+
+- 顶部 header 固定
+- 底部 composer 固定
+- 中间消息区独立滚动
+- 不展示右侧 rail 面板
+- 每条消息支持 Markdown 渲染与复制
 
 Pinia 建议拆分以下 store：
 
 - `authStore`
   - 当前用户、恢复登录态、登出
-- `workspaceStore`
-  - 工作区列表、当前工作区、分享信息
 - `conversationStore`
-  - 收件箱会话、当前会话、消息列表、assistant draft、SSE 流
+  - 最近会话列表、当前会话、消息列表、assistant draft、SSE 流
 - `knowledgeStore`
   - 知识库、文件上传状态、绑定关系
 - `taskStore`
@@ -247,9 +251,12 @@ Pinia 建议拆分以下 store：
 
 ### 4.4 聊天与知识检索关系
 
-- 默认收件箱会话：优先使用轻量聊天与任务建议
-- 工作区问答：优先使用工作区绑定的主题探索包和知识库
-- 报告问答：支持在完整工作流结束后围绕报告和引用继续追问
+- 聊天前端当前主对象是 `ChatSession`
+- 用户主心智为“最近会话”而不是“工作区分组”
+- 聊天记忆当前采用会话级隔离：
+  - 短期记忆：最近消息窗口
+  - 长期记忆：会话摘要
+- 本轮聊天主流程不依赖工作区上下文检索
 
 ## 5. 认证方案
 
@@ -569,6 +576,8 @@ apps/frontend/
 
 ### 12.2 Inbox / Chat
 
+- `GET /conversations`
+- `POST /conversations`
 - `GET /conversations/inbox`
 - `GET /conversations/{id}/messages`
 - `POST /conversations/{id}/messages/stream`
@@ -681,23 +690,25 @@ apps/frontend/
 - 登出时需要吊销或标记 `user_sessions.revoked_at`
 - `POST /auth/refresh` 使用 refresh cookie 续期登录会话
 
-### 14.3 打开默认聊天页
+### 14.3 打开聊天页
 
 接口：
 
-- `GET /conversations/inbox`
+- `GET /conversations`
 - `GET /conversations/{id}/messages`
 
 后端行为：
 
-1. 返回当前用户的 `inbox_conversations`
-2. 返回默认收件箱下最近活跃的 `chat_sessions`
-3. 返回该会话的消息历史
+1. 返回当前用户最近会话列表
+2. 若用户尚无会话，则自动创建一个默认会话
+3. 返回当前选中会话的消息历史
 
 前端行为：
 
 - 登录成功后默认进入聊天页
-- 如果没有历史消息，则展示空白引导态
+- 左侧展示最近会话
+- 用户可创建新聊天并切换历史会话
+- 如果当前会话没有消息，则展示空白引导态
 
 ### 14.4 聊天确定研究领域
 
@@ -713,13 +724,12 @@ apps/frontend/
    - `load_context`
    - `maybe_retrieve_context`
    - `call_model`
-4. 若当前会话已绑定工作区，则在图内额外走 RAG：
-   - query rewrite
-   - retrieval
-   - rerank
-   - context injection
-5. 图内通过 `graph.astream(..., stream_mode=["messages", "updates", "custom"], version="v2")` 产生内部流
-6. FastAPI SSE 层将内部流翻译为业务事件：
+4. `load_context` 读取当前会话记忆：
+   - 最近消息窗口
+   - 当前会话长期摘要
+5. `maybe_retrieve_context` 当前不做工作区检索，只保留轻量上下文占位
+6. 图内通过 `graph.astream(..., stream_mode=["messages", "updates", "custom"], version="v2")` 产生内部流
+7. FastAPI SSE 层将内部流翻译为业务事件：
    - `message.started`
    - `message.delta`
    - `message.progress`
@@ -728,19 +738,21 @@ apps/frontend/
    - `message.completed`
    - `message.failed`
    - `ping`
-7. AI 回复完成后一次性写入正式 assistant 消息
-8. 若回复属于任务建议，则写入 `message_type=task_suggestion`
+8. AI 回复完成后一次性写入正式 assistant 消息
+9. 若当前会话达到摘要阈值，则更新该会话长期摘要
 
 此阶段目标：
 
-- 帮用户把研究问题收束为可执行研究任务
-- 允许用户上传 PDF 并参与上下文
+- 让用户像 ChatGPT 一样直接进入会话式聊天
+- 在不跨会话串话的前提下保持连续上下文
+- 允许用户上传 PDF 并参与当前会话上下文
 
 持久化约束：
 
 - assistant 消息不做占位消息更新
 - 若流失败，不写半成品 assistant 消息
 - 引用依据仅在 `message.completed` 后写入 `citation_evidences`
+- 会话级长期记忆写回 `chat_sessions.memory_summary_text`
 
 ### 14.5 上传论文 / 资料
 
