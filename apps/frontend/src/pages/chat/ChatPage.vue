@@ -1,17 +1,31 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import MessageBubble from '../../components/chat/MessageBubble.vue'
-import TaskSuggestionCard from '../../components/chat/TaskSuggestionCard.vue'
 import EmptyState from '../../components/shared/EmptyState.vue'
-import RightRailCard from '../../components/shared/RightRailCard.vue'
 import { useConversationStore } from '../../stores/conversation'
 
 const conversationStore = useConversationStore()
+const messageViewport = ref<HTMLElement | null>(null)
 
 onMounted(() => {
   conversationStore.load()
 })
+
+watch(
+  () => conversationStore.messages.map((message) => `${message.id}-${message.content.length}`).join('|'),
+  async () => {
+    await nextTick()
+    if (messageViewport.value) {
+      messageViewport.value.scrollTop = messageViewport.value.scrollHeight
+    }
+  },
+)
+
+async function handleCreateConversation() {
+  await conversationStore.createNewConversation()
+}
 
 async function handleSend() {
   try {
@@ -26,28 +40,30 @@ async function handleSend() {
 </script>
 
 <template>
-  <section class="page-shell">
+  <section class="page-shell chat-page-shell">
     <header class="page-header">
       <div>
-        <h2>默认聊天页</h2>
-        <p>先聊明白研究问题，再确认任务、创建工作区，并把结果沉淀成主题探索包。</p>
+        <h2>{{ conversationStore.currentSession?.title ?? '新聊天' }}</h2>
+        <p>直接开始聊天，历史会话会自动保存在左侧列表中。</p>
       </div>
       <div class="page-actions">
         <el-button>上传资料</el-button>
-        <el-button type="primary">查看任务建议</el-button>
+        <el-button type="primary" @click="handleCreateConversation">
+          <el-icon><Plus /></el-icon>
+          新聊天
+        </el-button>
       </div>
     </header>
 
-    <div class="workspace-grid">
-      <div>
-        <div class="chat-surface">
+    <div class="chat-page-layout">
+      <div class="chat-surface chat-surface--conversation">
+        <div ref="messageViewport" class="message-viewport">
           <div v-if="conversationStore.messages.length" class="message-list">
             <MessageBubble v-for="message in conversationStore.messages" :key="message.id" :message="message" />
-            <TaskSuggestionCard v-if="conversationStore.taskSuggestion" :suggestion="conversationStore.taskSuggestion" />
           </div>
-          <EmptyState v-else text="当前没有消息记录，先从研究问题开始。" />
+          <EmptyState v-else text="当前没有消息记录，直接从你的问题开始。" />
         </div>
-        <div class="composer">
+        <div class="composer composer-fixed">
           <el-button>上传 PDF</el-button>
           <el-input
             v-model="conversationStore.composerText"
@@ -59,23 +75,6 @@ async function handleSend() {
           <el-button type="primary" :loading="conversationStore.isStreaming" @click="handleSend">发送</el-button>
         </div>
       </div>
-
-      <aside class="rail">
-        <RightRailCard
-          v-if="conversationStore.streamEvents.length"
-          title="实时流式状态"
-          :lines="conversationStore.streamEvents"
-        />
-        <template v-if="conversationStore.railCards.length">
-          <RightRailCard
-            v-for="card in conversationStore.railCards"
-            :key="card.title"
-            :title="card.title"
-            :lines="card.lines"
-          />
-        </template>
-        <EmptyState v-else text="任务确认面板暂时无内容。" />
-      </aside>
     </div>
   </section>
 </template>

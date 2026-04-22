@@ -1,52 +1,39 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import type {
-  ChatSessionDTO,
-  ChatStreamEventDTO,
-  ConversationHistoryGroup,
-  InboxConversationDTO,
-  MessageDTO,
-  TaskSuggestionDTO,
-} from '../types/chat'
-import {
-  getConversationMessages,
-  getConversationHistoryGroups,
-  getInboxConversation,
-  sendMessageStream,
-} from '../apis/chat'
+import type { ChatSessionDTO, ChatStreamEventDTO, MessageDTO } from '../types/chat'
+import { createConversation, getConversationMessages, getConversations, sendMessageStream } from '../apis/chat'
 
 export const useConversationStore = defineStore('conversation', () => {
-  const inboxConversation = ref<InboxConversationDTO | null>(null)
   const currentSession = ref<ChatSessionDTO | null>(null)
+  const sessions = ref<ChatSessionDTO[]>([])
   const messages = ref<MessageDTO[]>([])
-  const historyGroups = ref<ConversationHistoryGroup[]>([])
-  const taskSuggestion = ref<TaskSuggestionDTO | null>(null)
-  const railCards = ref<{ title: string; lines: string[] }[]>([])
   const streamEvents = ref<string[]>([])
   const composerText = ref('')
   const isStreaming = ref(false)
   const errorMessage = ref('')
 
   async function load() {
-    const inboxData = await getInboxConversation()
-    inboxConversation.value = inboxData.conversation
-    currentSession.value = inboxData.currentSession
-    messages.value = currentSession.value ? await getConversationMessages(currentSession.value.id) : []
-    historyGroups.value = await getConversationHistoryGroups()
-    railCards.value = []
-    syncTaskSuggestion()
-  }
+    sessions.value = await getConversations()
+    if (sessions.value.length === 0) {
+      const created = await createConversation()
+      sessions.value = [created]
+    }
 
-  function syncTaskSuggestion() {
-    const suggestionMessage = [...messages.value]
-      .reverse()
-      .find((message) => message.messageType === 'task_suggestion')
-    const metadataSuggestion = suggestionMessage?.metadata?.taskSuggestion
-    taskSuggestion.value = (metadataSuggestion as TaskSuggestionDTO | undefined) ?? null
+    const selectedSessionId = currentSession.value?.id ?? sessions.value[0]?.id
+    if (selectedSessionId) {
+      await selectConversation(selectedSessionId)
+    }
   }
 
   function pushEvent(detail: string) {
     streamEvents.value = [detail, ...streamEvents.value].slice(0, 8)
+  }
+
+  function markActiveSession(sessionId: string) {
+    sessions.value = sessions.value.map((session) => ({
+      ...session,
+      active: session.id === sessionId,
+    }))
   }
 
   function replaceDraftWith(message: MessageDTO) {
@@ -60,6 +47,26 @@ export const useConversationStore = defineStore('conversation', () => {
 
   function removeDraft() {
     messages.value = messages.value.filter((message) => !message.isDraft)
+  }
+
+  function updateCurrentSessionPreview(message: MessageDTO) {
+    if (!currentSession.value) return
+
+    currentSession.value = {
+      ...currentSession.value,
+      title:
+        currentSession.value.title === '新聊天'
+          ? message.content.replace(/\s+/g, ' ').slice(0, 24) || '新聊天'
+          : currentSession.value.title,
+      lastMessagePreview: message.content.replace(/\s+/g, ' ').slice(0, 120),
+      lastMessageAt: message.createdAt,
+      updatedAt: message.createdAt,
+      active: true,
+    }
+
+    sessions.value = sessions.value.map((session) =>
+      session.id === currentSession.value?.id ? { ...currentSession.value! } : session,
+    )
   }
 
   function handleStreamEvent(event: ChatStreamEventDTO) {
@@ -85,7 +92,7 @@ export const useConversationStore = defineStore('conversation', () => {
         const message = event.data.message as MessageDTO | undefined
         if (message) {
           replaceDraftWith(message)
-          syncTaskSuggestion()
+          updateCurrentSessionPreview(message)
         }
         break
       }
@@ -99,6 +106,20 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
+  async function selectConversation(sessionId: string) {
+    currentSession.value = sessions.value.find((session) => session.id === sessionId) ?? null
+    markActiveSession(sessionId)
+    messages.value = currentSession.value ? await getConversationMessages(currentSession.value.id) : []
+    streamEvents.value = []
+    errorMessage.value = ''
+  }
+
+  async function createNewConversation() {
+    const created = await createConversation()
+    sessions.value = [{ ...created, active: true }, ...sessions.value.map((session) => ({ ...session, active: false }))]
+    await selectConversation(created.id)
+  }
+
   async function sendCurrentMessage() {
     const content = composerText.value.trim()
     if (!content || !currentSession.value || isStreaming.value) return
@@ -107,6 +128,13 @@ export const useConversationStore = defineStore('conversation', () => {
     const now = new Date().toISOString()
     messages.value.push({
       id: `local-user-${Date.now()}`,
+      role: 'user',
+      messageType: 'chat',
+      content,
+      createdAt: now,
+    })
+    updateCurrentSessionPreview({
+      id: `preview-${Date.now()}`,
       role: 'user',
       messageType: 'chat',
       content,
@@ -144,17 +172,16 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   return {
-    inboxConversation,
     currentSession,
+    sessions,
     messages,
-    historyGroups,
-    taskSuggestion,
-    railCards,
     streamEvents,
     composerText,
     isStreaming,
     errorMessage,
     load,
+    selectConversation,
+    createNewConversation,
     sendCurrentMessage,
   }
 })

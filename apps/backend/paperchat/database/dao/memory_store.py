@@ -56,7 +56,7 @@ class SQLBackedStore:
 
             chat_session = PaperChatSessionRecord(
                 user_id=user_id,
-                title="默认聊天页",
+                title="新聊天",
                 scope="inbox",
                 inbox_conversation_id=inbox.id,
             )
@@ -93,6 +93,43 @@ class SQLBackedStore:
     def get_chat_session(self, session_id: str):
         with db_session() as session:
             return session.get(PaperChatSessionRecord, session_id)
+
+    def create_conversation(self, *, user_id: str, title: str = "新聊天"):
+        inbox = self.get_inbox_by_user(user_id)
+        if inbox is None:
+            inbox, _ = self.create_default_inbox(user_id)
+
+        with db_session() as session:
+            chat_session = PaperChatSessionRecord(
+                user_id=user_id,
+                title=title,
+                scope="inbox",
+                inbox_conversation_id=inbox.id,
+            )
+            session.add(chat_session)
+            session.flush()
+            return chat_session
+
+    def update_chat_session(self, session_id: str, **changes):
+        with db_session() as session:
+            chat_session = session.get(PaperChatSessionRecord, session_id)
+            if chat_session is None:
+                return None
+            for key, value in changes.items():
+                setattr(chat_session, key, value)
+            chat_session.updated_at = utcnow()
+            session.flush()
+            return chat_session
+
+    def list_conversations(self, user_id: str):
+        with db_session() as session:
+            return list(
+                session.scalars(
+                    select(PaperChatSessionRecord)
+                    .where(PaperChatSessionRecord.user_id == user_id)
+                    .order_by(desc(PaperChatSessionRecord.updated_at))
+                )
+            )
 
     def create_workspace(self, *, user_id: str, name: str, description: str = ""):
         with db_session() as session:
@@ -163,6 +200,10 @@ class SQLBackedStore:
             if chat_session is not None:
                 chat_session.last_message_at = message.created_at
                 chat_session.updated_at = message.created_at
+                if chat_session.title in {"默认聊天页", "新聊天"}:
+                    stripped_title = content.replace("\n", " ").strip()
+                    if stripped_title:
+                        chat_session.title = stripped_title[:24]
                 if chat_session.inbox_conversation_id:
                     inbox = session.get(PaperChatInboxConversationRecord, chat_session.inbox_conversation_id)
                     if inbox is not None:
@@ -179,6 +220,20 @@ class SQLBackedStore:
                     .order_by(PaperChatMessageRecord.created_at.asc())
                 )
             )
+
+    def get_recent_context_messages(self, session_id: str, limit: int):
+        messages = self.list_messages(session_id)
+        return messages[-limit:]
+
+    def get_messages_since(self, session_id: str, last_message_id: str | None):
+        messages = self.list_messages(session_id)
+        if not last_message_id:
+            return messages
+        try:
+            index = next(i for i, message in enumerate(messages) if message.id == last_message_id)
+        except StopIteration:
+            return messages
+        return messages[index + 1 :]
 
     def create_user_session(self, *, user_id: str, refresh_token: str, expires_at: datetime):
         with db_session() as session:
@@ -331,12 +386,19 @@ class SQLBackedStore:
         }
 
     def as_chat_session_payload(self, session) -> dict:
+        last_message_preview = ""
+        recent_messages = self.list_messages(session.id)
+        if recent_messages:
+            last_message_preview = recent_messages[-1].content.replace("\n", " ").strip()[:120]
         return {
             "id": session.id,
             "title": session.title,
             "scope": session.scope,
             "status": session.status,
             "last_message_at": session.last_message_at.isoformat() if session.last_message_at else None,
+            "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+            "last_message_preview": last_message_preview,
+            "memory_summary_text": session.memory_summary_text,
         }
 
     def as_inbox_payload(self, inbox) -> dict:

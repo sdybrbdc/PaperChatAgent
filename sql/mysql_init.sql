@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS `paperchat_chat_sessions` (
   `status` VARCHAR(32) NOT NULL DEFAULT 'active',
   `workspace_id` VARCHAR(36) DEFAULT NULL,
   `inbox_conversation_id` VARCHAR(36) DEFAULT NULL,
+  `memory_summary_text` TEXT NOT NULL,
+  `last_summarized_message_id` VARCHAR(36) DEFAULT NULL,
   `last_message_at` DATETIME DEFAULT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

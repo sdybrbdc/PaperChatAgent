@@ -56,11 +56,11 @@ async function handleRegister() {
 <template>
   <div class="auth-brand-block">
     <h1>PaperChatAgent</h1>
-    <p>创建账号后即可进入默认聊天页，逐步建立研究工作区。</p>
+    <p>创建账号后即可进入默认聊天页，直接开始新的研究对话。</p>
     <AuthInfoCard
       title="创建账号后你将获得"
-      description="统一的论文调研入口、工作区分组历史、知识库管理和后台任务跟踪能力。"
-      :items="['1. 默认收件箱会话', '2. 账号级全局知识库', '3. 完整研究工作流与报告产物']"
+      description="统一的论文调研入口、最近会话历史、知识资料管理和后台任务跟踪能力。"
+      :items="['1. 最近会话历史', '2. 账号级资料管理', '3. 完整研究工作流与报告产物']"
       pill="面向研究工作流"
       pill-class="success"
     />
@@ -68,7 +68,7 @@ async function handleRegister() {
 
   <div class="form-card">
     <h2>创建账号</h2>
-    <p>使用邮箱注册，开始你的论文调研与多智能体研究流程。</p>
+    <p>使用邮箱注册，开始你的论文调研与连续对话。</p>
 
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
       <el-form-item label="显示名称" prop="displayName">

@@ -45,11 +45,11 @@ async function handleLogin() {
     <p>面向科研人员和学生的主题级论文问答工作台</p>
     <AuthInfoCard
       title="登录后你可以"
-      description="从默认聊天页开始，先和 AI 讨论研究方向，再逐步形成研究工作区、知识库和后台任务。"
+      description="从默认聊天页开始，直接和 AI 讨论研究方向，并在最近会话中持续追问。"
       :items="[
-        '1. 在收件箱会话中澄清研究问题',
-        '2. 上传论文并确认任务建议',
-        '3. 跟踪完整工作流并继续问答',
+        '1. 直接开始新聊天',
+        '2. 上传论文并围绕资料继续追问',
+        '3. 在最近会话中持续保留聊天历史',
       ]"
       pill="白色主主题"
     />
@@ -57,7 +57,7 @@ async function handleLogin() {
 
   <div class="form-card">
     <h2>欢迎回来</h2>
-    <p>使用邮箱和密码登录，继续你的论文调研与研究工作流。</p>
+    <p>使用邮箱和密码登录，继续你的论文调研与最近会话。</p>
 
     <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
       <el-form-item label="邮箱" prop="email">

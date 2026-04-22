@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowRight, Plus } from '@element-plus/icons-vue'
 import AppLogoBlock from './AppLogoBlock.vue'
 import { useAuthStore } from '../../stores/auth'
 import { useConversationStore } from '../../stores/conversation'
@@ -25,10 +25,15 @@ const navItems = [
 const currentUserName = computed(() => authStore.currentUser?.displayName ?? 'sdybdc')
 
 onMounted(() => {
-  if (conversationStore.historyGroups.length === 0) {
+  if (conversationStore.sessions.length === 0) {
     conversationStore.load()
   }
 })
+
+async function handleCreateConversation() {
+  await conversationStore.createNewConversation()
+  await router.push('/chat')
+}
 
 async function handleLogout() {
   await authStore.logout()
@@ -42,7 +47,7 @@ async function handleLogout() {
 
     <div class="user-chip">
       <strong>{{ currentUserName }}</strong>
-      <span>研究工作台已登录</span>
+      <span>最近会话已同步</span>
     </div>
 
     <section>
@@ -75,24 +80,30 @@ async function handleLogout() {
     <div class="sidebar-history-area">
       <section class="sidebar-history-section">
         <button class="sidebar-section-trigger" type="button" @click="uiStore.toggleHistoryCollapsed()">
-          <span>工作区与会话</span>
+          <span>最近会话</span>
           <el-icon>
             <ArrowDown v-if="!uiStore.historyCollapsed" />
             <ArrowRight v-else />
           </el-icon>
         </button>
+        <el-button class="new-chat-button" type="primary" plain @click="handleCreateConversation">
+          <el-icon><Plus /></el-icon>
+          新聊天
+        </el-button>
         <div v-show="!uiStore.historyCollapsed" class="sidebar-scroll">
-          <div class="history-group">
-            <template v-for="group in conversationStore.historyGroups" :key="group.id">
-              <div v-if="group.type === 'inbox'" class="history-card inbox">
-                <p class="history-card-title">{{ group.title }}</p>
-                <p class="history-card-subtitle">{{ group.subtitle }}</p>
-              </div>
-              <div v-else class="workspace-block">
-                <h4>{{ group.title }}</h4>
-                <div v-for="item in group.items" :key="item" class="workspace-child">{{ item }}</div>
-              </div>
-            </template>
+          <div class="history-group recent-chat-list">
+            <button
+              v-for="session in conversationStore.sessions"
+              :key="session.id"
+              type="button"
+              class="recent-chat-item"
+              :class="{ active: session.active }"
+              @click="conversationStore.selectConversation(session.id)"
+            >
+              <div class="recent-chat-title">{{ session.title }}</div>
+              <div v-if="session.lastMessagePreview" class="recent-chat-preview">{{ session.lastMessagePreview }}</div>
+              <div v-if="session.updatedAt" class="recent-chat-time">{{ session.updatedAt }}</div>
+            </button>
           </div>
         </div>
       </section>

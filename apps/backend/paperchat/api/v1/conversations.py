@@ -19,6 +19,16 @@ class SendMessageStreamRequest(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+@router.get("", response_model=APIResponse)
+async def list_conversations(request: Request, user=Depends(get_current_user)):
+    return ok(request, data=chat_service.list_conversations_payload(user.id))
+
+
+@router.post("", response_model=APIResponse)
+async def create_conversation(request: Request, user=Depends(get_current_user)):
+    return ok(request, data=chat_service.create_conversation_payload(user.id))
+
+
 @router.get("/inbox", response_model=APIResponse)
 async def get_inbox(request: Request, user=Depends(get_current_user)):
     return ok(request, data=chat_service.get_inbox_payload(user.id))

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 NODE_DETAILS = {
     "load_context": "会话上下文已加载",
-    "maybe_retrieve_context": "工作区检索阶段已完成",
+    "maybe_retrieve_context": "附加上下文阶段已完成",
     "call_model": "模型生成阶段已完成",
 }
 

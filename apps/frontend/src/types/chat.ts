@@ -12,6 +12,9 @@ export interface ChatSessionDTO {
   scope: 'inbox' | 'workspace'
   status?: 'active' | 'archived'
   lastMessageAt?: string | null
+  updatedAt?: string | null
+  lastMessagePreview?: string
+  active?: boolean
 }
 
 export interface MessageDTO {
@@ -32,14 +35,6 @@ export interface TaskSuggestionDTO {
   outputs: string
   nextStep: string
   statusLabel: string
-}
-
-export interface ConversationHistoryGroup {
-  id: string
-  title: string
-  subtitle?: string
-  items?: string[]
-  type?: 'inbox' | 'workspace'
 }
 
 export interface ChatStreamEventDTO {

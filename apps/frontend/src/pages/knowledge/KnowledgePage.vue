@@ -17,7 +17,7 @@ onMounted(() => {
     <header class="page-header">
       <div>
         <h2>知识库</h2>
-        <p>管理账号内全局知识库与工作区私有补充库，支持 arXiv 引入和 PDF 上传。</p>
+        <p>管理账号资料，支持 arXiv 引入和 PDF 上传。</p>
       </div>
       <div class="page-actions">
         <el-button>上传 PDF</el-button>
@@ -26,7 +26,7 @@ onMounted(() => {
     </header>
 
     <div class="toolbar-search">
-      <el-input placeholder="搜索论文标题、作者、来源或工作区..." />
+      <el-input placeholder="搜索论文标题、作者或来源..." />
     </div>
 
     <div class="knowledge-grid">
@@ -34,7 +34,7 @@ onMounted(() => {
         <KnowledgeSectionCard v-if="knowledgeStore.globalBase" :section="knowledgeStore.globalBase" />
         <EmptyState v-else text="当前没有全局知识库内容。" />
         <KnowledgeSectionCard v-if="knowledgeStore.privateBase" :section="knowledgeStore.privateBase" two-columns />
-        <EmptyState v-else text="当前工作区还没有私有知识库内容。" />
+        <EmptyState v-else text="当前没有额外的私有资料内容。" />
       </div>
 
       <aside class="rail">

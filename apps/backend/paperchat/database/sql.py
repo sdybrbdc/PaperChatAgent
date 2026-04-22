@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -77,3 +77,31 @@ def init_database() -> None:
 
     ensure_database_exists()
     Base.metadata.create_all(bind=engine, checkfirst=True)
+    ensure_runtime_columns()
+
+
+def ensure_runtime_columns() -> None:
+    inspector = inspect(engine)
+    if "paperchat_chat_sessions" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("paperchat_chat_sessions")}
+    alter_statements: list[str] = []
+
+    if "memory_summary_text" not in existing_columns:
+        alter_statements.append(
+            "ALTER TABLE `paperchat_chat_sessions` "
+            "ADD COLUMN `memory_summary_text` TEXT NOT NULL DEFAULT ''"
+        )
+    if "last_summarized_message_id" not in existing_columns:
+        alter_statements.append(
+            "ALTER TABLE `paperchat_chat_sessions` "
+            "ADD COLUMN `last_summarized_message_id` VARCHAR(36) NULL"
+        )
+
+    if not alter_statements:
+        return
+
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+        for statement in alter_statements:
+            connection.execute(text(statement))

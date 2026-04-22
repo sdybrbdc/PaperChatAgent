@@ -81,6 +81,8 @@ class PaperChatSessionRecord(Base):
     inbox_conversation_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("paperchat_inbox_conversations.id"), nullable=True, index=True
     )
+    memory_summary_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    last_summarized_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)

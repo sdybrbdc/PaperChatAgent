@@ -12,12 +12,15 @@
     "@element-plus/icons-vue": "^2.3.2",
     "@microsoft/fetch-event-source": "^2.0.1",
     "axios": "^1.15.1",
+    "dompurify": "^3.2.6",
     "element-plus": "^2.13.7",
+    "markdown-it": "^14.1.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
     "vue-router": "^5.0.4"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.12.2",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
