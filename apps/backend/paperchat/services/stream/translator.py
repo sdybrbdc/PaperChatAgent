@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-
-NODE_DETAILS = {
-    "load_context": "会话上下文已加载",
-    "maybe_retrieve_context": "附加上下文阶段已完成",
-    "call_model": "模型生成阶段已完成",
-}
+from paperchat.prompts import CHAT_STREAM_NODE_DETAILS
 
 
 def normalize_chat_stream_part(part: tuple | dict) -> dict:
@@ -40,7 +35,7 @@ def translate_chat_stream_part(part: tuple | dict) -> list[tuple[str, dict]]:
                         "stage": node_name,
                         "node": node_name,
                         "status": "completed",
-                        "detail": NODE_DETAILS.get(node_name, f"{node_name} 已完成"),
+                        "detail": CHAT_STREAM_NODE_DETAILS.get(node_name, f"{node_name} 已完成"),
                     },
                 )
             )

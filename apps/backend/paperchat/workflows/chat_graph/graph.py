@@ -7,6 +7,12 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from paperchat.providers import get_conversation_chat_model
+from paperchat.prompts import (
+    CHAT_CONTEXT_LOADING_MESSAGE,
+    CHAT_MEMORY_LOADED_MESSAGE,
+    CHAT_NO_EXTRA_CONTEXT_MESSAGE,
+    build_chat_system_prompt,
+)
 
 
 class ChatGraphState(TypedDict):
@@ -25,11 +31,11 @@ def build_chat_graph():
 
     async def load_context(state: ChatGraphState):
         writer = get_stream_writer()
-        writer({"kind": "info", "detail": "正在加载当前会话上下文"})
+        writer({"kind": "info", "detail": CHAT_CONTEXT_LOADING_MESSAGE})
 
         summary_text = (state.get("memory_summary_text") or "").strip()
         if summary_text:
-            writer({"kind": "info", "detail": "已加载当前会话长期摘要"})
+            writer({"kind": "info", "detail": CHAT_MEMORY_LOADED_MESSAGE})
 
         return {
             "context_summary": summary_text,
@@ -37,18 +43,14 @@ def build_chat_graph():
 
     async def maybe_retrieve_context(state: ChatGraphState):
         writer = get_stream_writer()
-        writer({"kind": "info", "detail": "当前无额外上下文检索"})
+        writer({"kind": "info", "detail": CHAT_NO_EXTRA_CONTEXT_MESSAGE})
         return {"retrieved_context": ""}
 
     async def call_model(state: ChatGraphState):
-        system_prompt = (
-            "你是 PaperChatAgent 的研究助手。请基于上下文帮助用户收束研究问题，"
-            "给出下一步建议，并保持回答简洁、专业、可执行。"
+        system_prompt = build_chat_system_prompt(
+            memory_summary_text=state["context_summary"],
+            retrieved_context=state["retrieved_context"],
         )
-        if state["context_summary"]:
-            system_prompt += f"\n\n当前会话长期摘要：\n{state['context_summary']}"
-        if state["retrieved_context"]:
-            system_prompt += f"\n\n补充上下文：\n{state['retrieved_context']}"
 
         response = await model.ainvoke(
             [

@@ -8,6 +8,7 @@ from paperchat.api.errcode import AppError
 from paperchat.api.responses.sse import encode_sse, now_iso
 from paperchat.database.dao import memory_store
 from paperchat.providers import get_conversation_chat_model
+from paperchat.prompts import build_session_memory_summary_prompt
 from paperchat.services.stream import translate_chat_stream_part
 from paperchat.workflows.chat_graph import build_chat_graph
 
@@ -86,12 +87,9 @@ class ChatService:
         conversation_text = "\n".join(
             f"{message.role}: {message.content}" for message in messages_to_summarize
         )
-        prompt = (
-            "请把以下聊天历史压缩成后续对话可复用的长期摘要，"
-            "保留：用户目标、已确认的约束、重要结论、待跟进问题。"
-            "输出简洁中文摘要。\n\n"
-            f"已有摘要：\n{session.memory_summary_text or '（暂无）'}\n\n"
-            f"新增历史：\n{conversation_text}"
+        prompt = build_session_memory_summary_prompt(
+            existing_summary=session.memory_summary_text or "",
+            conversation_text=conversation_text,
         )
 
         response = await self.summary_model.ainvoke([HumanMessage(content=prompt)])
