@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+import re
 
 import httpx
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -12,10 +13,22 @@ from paperchat.settings import ModelEndpointSettings, get_settings
 
 
 ChatSlot = Literal["conversation_model", "tool_call_model", "reasoning_model", "qwen_vl"]
+ENV_PLACEHOLDER_RE = re.compile(r"^\$\{?[A-Z0-9_]+\}?$")
+
+
+def _is_missing_value(value: str) -> bool:
+    stripped = value.strip()
+    if not stripped:
+        return True
+    return bool(ENV_PLACEHOLDER_RE.fullmatch(stripped))
 
 
 def _require_endpoint(slot: str, config: ModelEndpointSettings) -> ModelEndpointSettings:
-    if not config.api_key or not config.base_url or not config.model_name:
+    if (
+        _is_missing_value(config.api_key)
+        or _is_missing_value(config.base_url)
+        or _is_missing_value(config.model_name)
+    ):
         raise AppError(
             status_code=500,
             code="MODEL_CONFIG_MISSING",

@@ -161,14 +161,22 @@ multi_models:
     api_key: "your-key"
     base_url: "https://your-reasoning-endpoint/v1"
     model_name: "deepseek-reasoner"
-  embedding_model:
+  qwen_vl:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model_name: "qwen-vl-plus"
+  embedding:
     api_key: "your-key"
     base_url: "https://your-embedding-endpoint/v1"
     model_name: "text-embedding-3-large"
-  rerank_model:
+  rerank:
     api_key: "your-key"
     base_url: "https://your-rerank-endpoint/v1"
     model_name: "rerank-model"
+  text2image:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://your-text2image-endpoint"
+    model_name: "text2image-model"
 
 workflow:
   engine: "langgraph"

@@ -135,13 +135,16 @@ V1 使用 `SSE` 处理以下两类实时场景：
 
 - 使用 LangChain 作为聊天模型与 RAG 编排基础层
 - 使用 LangGraph 组织轻量聊天图，而不是在 FastAPI 路由里直接手写 token 流
-- 模型实例通过 LangChain `ChatOpenAI` 风格对象统一创建
+- 业务层面对聊天模型统一依赖 `BaseChatModel` 抽象接口
+- provider 工厂内部优先通过 LangChain `ChatOpenAI` 创建 OpenAI-compatible 聊天客户端
 - 保留 AgentChat 的多模型配置思想：
   - `conversation_model`
   - `tool_call_model`
   - `reasoning_model`
-  - `embedding_model`
-  - `rerank_model`
+  - `qwen_vl`
+  - `embedding`
+  - `rerank`
+  - `text2image`
 - RAG 能力参考 AgentChat 的组织方式：
   - 查询改写
   - 混合检索
@@ -174,6 +177,21 @@ V1 使用 `SSE` 处理以下两类实时场景：
   - 发送心跳
   - 处理客户端断开
   - 补充 `message.started / message.completed / message.failed`
+
+当前 provider 默认实现：
+
+- `conversation_model / tool_call_model / reasoning_model / qwen_vl`
+  - 使用 `ChatOpenAI(base_url=..., api_key=..., model=...)`
+- `embedding`
+  - 使用 OpenAI-compatible embedding 客户端
+- `rerank / text2image`
+  - 使用轻量 HTTP client 封装
+
+实现约束：
+
+- provider 工厂层只负责“按配置返回具体客户端”
+- 配置不完整时 fail fast，返回明确错误
+- 业务代码不直接 import 具体 provider 实现类
 
 ### 4.2 前端聊天实现细节
 
@@ -317,14 +335,22 @@ multi_models:
     api_key: "your-key"
     base_url: "https://your-reasoning-endpoint/v1"
     model_name: "deepseek-reasoner"
-  embedding_model:
+  qwen_vl:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model_name: "qwen-vl-plus"
+  embedding:
     api_key: "your-key"
     base_url: "https://your-embedding-endpoint/v1"
     model_name: "text-embedding-3-large"
-  rerank_model:
+  rerank:
     api_key: "your-key"
     base_url: "https://your-rerank-endpoint/v1"
     model_name: "rerank-model"
+  text2image:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://your-text2image-endpoint"
+    model_name: "text2image-model"
 ```
 
 ## 7. 工作流实现路线
@@ -414,8 +440,10 @@ V1 文档同时支持：
 - `conversation_model`
 - `tool_call_model`
 - `reasoning_model`
-- `embedding_model`
-- `rerank_model`
+- `qwen_vl`
+- `embedding`
+- `rerank`
+- `text2image`
 
 ### 9.3 Provider 层职责
 
