@@ -20,6 +20,8 @@ dependencies = [
   "langchain-core>=0.3,<0.4",
   "langgraph>=0.2.60,<0.3",
   "langchain-openai>=0.2,<0.4",
+  "autogen-agentchat>=0.7,<0.8",
+  "autogen-ext[openai]>=0.7,<0.8",
 ]
 
 [tool.uv]

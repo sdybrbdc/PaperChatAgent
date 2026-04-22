@@ -28,7 +28,13 @@ class CreateTaskRequest(BaseModel):
 
 @router.post("", response_model=APIResponse)
 async def create_task(payload: CreateTaskRequest, request: Request, user=Depends(get_current_user)):
-    task = await task_service.create_task(user_id=user.id, title=payload.topic, workspace_name=payload.workspace_name)
+    task = await task_service.create_task(
+        user_id=user.id,
+        title=payload.topic,
+        workspace_name=payload.workspace_name,
+        keywords=payload.keywords,
+        source_config=payload.source_config,
+    )
     return ok(request, data=task)
 
 

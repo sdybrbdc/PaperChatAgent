@@ -1,83 +1,45 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
+from paperchat.api.errcode import AppError
 from paperchat.api.responses import APIResponse, ok
 from paperchat.auth import get_current_user
+from paperchat.database.dao import memory_store
+from paperchat.workflows import DEFAULT_WORKFLOW_ID, build_node_payloads, build_workflow_payload, list_workflow_payloads
 
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
 
-WORKFLOW_ID = "paperchat-default-workflow"
-WORKFLOW_NODES = [
-    {
-        "id": "search_agent_node",
-        "title": "搜索节点",
-        "description": "收束需求并构建检索条件",
-        "status": "idle",
-        "order": 1,
-    },
-    {
-        "id": "reading_agent_node",
-        "title": "阅读节点",
-        "description": "解析论文摘要与全文结构",
-        "status": "idle",
-        "order": 2,
-    },
-    {
-        "id": "analyse_agent_node",
-        "title": "分析节点",
-        "description": "聚类并形成主题分析",
-        "status": "idle",
-        "order": 3,
-    },
-    {
-        "id": "writing_agent_node",
-        "title": "写作节点",
-        "description": "整理阶段性写作结果",
-        "status": "idle",
-        "order": 4,
-    },
-    {
-        "id": "report_agent_node",
-        "title": "报告节点",
-        "description": "生成主题探索包与最终产物",
-        "status": "idle",
-        "order": 5,
-    },
-]
-
-
 @router.get("/workflows", response_model=APIResponse)
 async def list_workflows(request: Request, user=Depends(get_current_user)):
-    return ok(
-        request,
-        data={
-            "items": [
-                {
-                    "id": WORKFLOW_ID,
-                    "name": "PaperChatAgent 默认研究工作流",
-                    "node_count": len(WORKFLOW_NODES),
-                }
-            ]
-        },
-    )
+    return ok(request, data={"items": list_workflow_payloads()})
 
 
 @router.get("/workflows/{workflow_id}", response_model=APIResponse)
 async def get_workflow(workflow_id: str, request: Request, user=Depends(get_current_user)):
-    return ok(
-        request,
-        data={
-            "id": workflow_id,
-            "name": "PaperChatAgent 默认研究工作流",
-            "node_count": len(WORKFLOW_NODES),
-            "description": "当前为占位工作流定义，用于前后端联调与 Swagger 展示。",
-        },
-    )
+    payload = build_workflow_payload(workflow_id)
+    if payload is None:
+        raise AppError(status_code=404, code="WORKFLOW_NOT_FOUND", message="工作流不存在")
+    return ok(request, data=payload)
 
 
 @router.get("/workflows/{workflow_id}/nodes", response_model=APIResponse)
-async def get_workflow_nodes(workflow_id: str, request: Request, user=Depends(get_current_user)):
-    return ok(request, data={"items": WORKFLOW_NODES})
+async def get_workflow_nodes(
+    workflow_id: str,
+    request: Request,
+    task_id: str | None = Query(default=None),
+    user=Depends(get_current_user),
+):
+    if workflow_id != DEFAULT_WORKFLOW_ID:
+        raise AppError(status_code=404, code="WORKFLOW_NOT_FOUND", message="工作流不存在")
+
+    node_runs = None
+    if task_id:
+        task = memory_store.get_task(task_id)
+        if task is None or task.user_id != user.id:
+            raise AppError(status_code=404, code="TASK_NOT_FOUND", message="任务不存在")
+        node_runs = memory_store.list_task_node_runs(task_id)
+
+    return ok(request, data={"items": build_node_payloads(node_runs)})

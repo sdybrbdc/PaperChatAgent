@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from hashlib import sha256
 from uuid import uuid4
@@ -32,6 +33,8 @@ class SQLBackedStore:
     def __init__(self) -> None:
         self.task_events: dict[str, list[dict]] = {}
         self.task_subscribers: dict[str, set[asyncio.Queue]] = {}
+        self.task_node_runs: dict[str, dict[str, dict]] = {}
+        self.task_reports: dict[str, dict] = {}
 
     def create_user(self, *, email: str, password_hash: str, display_name: str):
         with db_session() as session:
@@ -274,6 +277,7 @@ class SQLBackedStore:
             session.flush()
             self.task_events.setdefault(task.id, [])
             self.task_subscribers.setdefault(task.id, set())
+            self.task_node_runs.setdefault(task.id, {})
             return task
 
     def update_task(self, task_id: str, **changes):
@@ -300,6 +304,59 @@ class SQLBackedStore:
                     .order_by(desc(PaperChatResearchTaskRecord.updated_at))
                 )
             )
+
+    def init_task_workflow(self, *, task_id: str, workflow_id: str, nodes: Sequence) -> None:
+        self.task_node_runs[task_id] = {
+            node.id: {
+                **node.as_payload(status="queued", detail="等待执行"),
+                "workflow_id": workflow_id,
+            }
+            for node in nodes
+        }
+
+    def list_task_node_runs(self, task_id: str) -> list[dict]:
+        node_runs = list(self.task_node_runs.get(task_id, {}).values())
+        return sorted(node_runs, key=lambda item: item.get("order", 0))
+
+    def update_task_node_run(self, task_id: str, node_id: str, **changes) -> dict | None:
+        node_runs = self.task_node_runs.setdefault(task_id, {})
+        node = node_runs.get(node_id)
+        if node is None:
+            return None
+
+        node.update(changes)
+        now = utcnow().isoformat()
+        status = str(node.get("status", ""))
+        if status == "running" and not node.get("started_at"):
+            node["started_at"] = now
+        if status in {"completed", "failed", "canceled"}:
+            node["completed_at"] = now
+        return node
+
+    def save_task_report(
+        self,
+        task_id: str,
+        *,
+        title: str,
+        content_markdown: str,
+        summary: str,
+        artifact_type: str = "markdown",
+    ) -> dict:
+        task = self.get_task(task_id)
+        payload = {
+            "task_id": task_id,
+            "status": task.status if task else "completed",
+            "title": title,
+            "summary": summary,
+            "artifact_type": artifact_type,
+            "content_markdown": content_markdown,
+            "updated_at": utcnow().isoformat(),
+        }
+        self.task_reports[task_id] = payload
+        return payload
+
+    def get_task_report(self, task_id: str) -> dict | None:
+        return self.task_reports.get(task_id)
 
     def create_knowledge_file(
         self,
@@ -364,6 +421,7 @@ class SQLBackedStore:
             "progress_percent": task.progress_percent,
             "detail": task.detail,
             "occurred_at": utcnow().isoformat(),
+            "nodes": self.list_task_node_runs(task_id),
         }
 
     def as_user_payload(self, user) -> dict:
