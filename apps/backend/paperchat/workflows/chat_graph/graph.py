@@ -27,11 +27,12 @@ def build_chat_graph():
         writer = get_stream_writer()
         writer({"kind": "info", "detail": "正在加载当前会话上下文"})
 
-        if state.get("memory_summary_text", "").strip():
+        summary_text = (state.get("memory_summary_text") or "").strip()
+        if summary_text:
             writer({"kind": "info", "detail": "已加载当前会话长期摘要"})
 
         return {
-            "context_summary": state.get("memory_summary_text", "").strip(),
+            "context_summary": summary_text,
         }
 
     async def maybe_retrieve_context(state: ChatGraphState):
