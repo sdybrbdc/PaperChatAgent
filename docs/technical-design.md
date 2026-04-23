@@ -2,957 +2,479 @@
 
 ## 1. 文档目标
 
-本文档用于冻结 V1 的技术选型、接口风格、配置方式和运行边界，达到“实现者读完即可搭项目骨架”的粒度。
+本文档用于冻结 PaperChatAgent V1 的技术方案、模块边界、接口语义和实现约束，使工程实现能够稳定围绕“聊天主链路 + 模块化能力”展开。
 
-## 2. 技术基线
+## 2. 设计原则
 
-### 2.1 前端
+### 2.1 聊天优先
 
-- 框架：Vue 3
-- 构建工具：Vite
-- 包管理：pnpm
-- 路由：Vue Router
-- 状态管理：Pinia
-- UI 组件库：Element Plus
-- 目标：构建默认聊天页、工作区视图、知识库页、智能体页、后台任务页
+- 聊天是唯一主链路
+- 会话是前后端的主对象
+- 其他模块都围绕聊天提供能力，而不是与聊天争夺主入口
+
+### 2.2 模块独立
+
+- 知识库独立负责资料解析与检索来源管理
+- 智能体独立负责工作流定义与能力扩展
+- MCP / Skills 独立负责工具配置
+- 模型模块独立负责配置与路由
+- 后台任务独立负责展示工作流执行进度
+
+### 2.3 文档与实现分层
+
+- 文档先冻结目标语义
+- 当前实现中的旧命名与兼容结构必须单独标注为“过渡状态”
+- 不再让旧的“工作台 / 工作区”叙事污染新方案
+
+## 3. 技术基线
+
+### 3.1 前端
+
+- Vue 3
+- Vite
+- Vue Router
+- Pinia
+- Element Plus
+- Axios
+
+### 3.2 后端
+
+- FastAPI
+- LangChain
+- LangGraph
+- AutoGen
+- SQLAlchemy
+
+### 3.3 数据与运行时
+
+- MySQL
+- MinIO
+- ChromaDB
+- Python `asyncio`
+
+## 4. 前端方案
+
+### 4.1 路由模块
+
+目标前端路由如下：
+
+- `/chat`
+- `/knowledge`
+- `/agents`
+- `/mcp`
+- `/skills`
+- `/models`
+- `/tasks`
+- `/dashboard`
 
 说明：
 
-- 由于项目基于 Vue 3，组件库采用 `Element Plus`，而不是旧版 `Element UI`
-- `Pinia` 作为当前项目的默认状态管理方案，不再采用纯局部状态拼装页面
+- 当前仓库已实现 `chat / knowledge / agents / tasks`
+- `mcp / skills / models / dashboard` 为下一阶段扩展模块
 
-### 2.2 后端
+### 4.2 页面职责
 
-- 框架：FastAPI
-- 风格：异步 API 服务
-- 分层方式：Pydantic / SQLModel 风格分层
-- 目标：提供 REST API、SSE 流、认证、工作区/任务/知识库资源管理
+#### Chat Page
 
-### 2.3 队列与任务执行
+- 会话列表
+- 消息列表
+- 输入框与上传入口
+- 流式响应展示
+- 动态研究提示与研究草案入口
 
-- 队列：Redis
-- 任务执行器：独立 worker 进程
-- 目标：承接检索、下载、解析、建索引和主题探索等长任务
+#### Knowledge Page
 
-### 2.4 数据与存储
+- 知识库列表页
+- 知识库详情页
+- 文件列表与解析 / 索引状态
+- 上传与导入入口
 
-- 关系数据库：MySQL
-- 向量数据库：ChromaDB
-- 对象存储：MinIO
+#### Agents Page
 
-### 2.5 工作流与模型
+- 智能体列表页
+- 智能体详情页
+- 节点级模型 / 执行器配置
+- 项目子 Agent 与自定义 Agent 扩展
 
-- 工作流编排：LangGraph + AutoGen
-- 模型接入：Provider abstraction + LangChain configuration
-- 预留多模型路由：
-  - conversation
-  - tool_call
-  - reasoning
-  - embedding
-  - rerank
+#### Tasks Page
 
-## 3. API 风格
+- 任务列表
+- 当前节点
+- 节点进度
+- 运行状态与结果摘要
 
-### 3.1 资源接口
+#### Models / MCP / Skills / Dashboard
 
-V1 后端采用 `REST` 作为主资源接口风格。原因：
+- 作为独立模块管理配置或展示指标
+- 不承担聊天主链路
 
-- 与当前工作台型产品形态一致
-- 更适合用户、工作区、任务、知识、会话等资源建模
-- 实现和调试成本低于 GraphQL
-
-### 3.2 流式与实时接口
-
-V1 使用 `SSE` 处理以下两类实时场景：
-
-- 聊天输出流
-- 后台任务进度流
-
-不使用 WebSocket 作为首选协议，原因：
-
-- 当前交互主要是单向事件推送
-- SSE 更容易与 FastAPI 集成
-- 对前端调试和部署代理更友好
-
-实现约束：
-
-- 聊天主链路采用单请求流式接口：
-  - `POST /conversations/{id}/messages/stream`
-- 聊天流内部由 `LangChain / LangGraph` 负责产生事件流：
-  - `graph.astream(..., stream_mode=["messages", "updates", "custom"], version="v2")`
-- `FastAPI` 仅负责：
-  - 校验权限
-  - 维护 SSE 连接
-  - 将内部流翻译为前端消费的业务事件
-  - 补充 `message.started / message.completed / message.failed / ping`
-- 后台任务流保留 `GET /tasks/{id}/events`
-- 任务事件采用“数据库快照 + Redis Pub/Sub 实时增量”的桥接方式
-
-## 3.3 前后端数据契约
-
-前端和后端必须围绕统一 DTO/VO 契约开发，不能让前端自行拼装后端返回结构。
-
-建议原则：
-
-- 后端返回稳定的页面消费对象，不让前端自行猜字段
-- 前端 Pinia store 直接消费 DTO，不在组件里临时重组
-- 消息、任务、工作区、知识库等核心资源统一使用 `id + status + timestamps + metadata` 的基础结构
-- 成功响应统一为：
-  - `code + message + data + request_id`
-- 失败响应统一为：
-  - `code + message + details + request_id`
-
-推荐首批对齐的数据对象如下：
-
-| 前端类型 | 后端资源 | 主要来源表 | 说明 |
-|---|---|---|---|
-| `CurrentUserDTO` | `/me` | `users` | 当前用户信息 |
-| `InboxConversationDTO` | `/conversations/inbox` | `inbox_conversations` | 默认收件箱会话 |
-| `ChatSessionDTO` | `/conversations/*` | `chat_sessions` | 会话容器 |
-| `MessageDTO` | `/conversations/{id}/messages` | `messages` | 聊天消息 |
-| `ChatStreamEventDTO` | `/conversations/{id}/messages/stream` | LangGraph stream + SSE adapter | 聊天流式业务事件 |
-| `TaskSuggestionDTO` | `messages.message_type=task_suggestion` | `messages` | 任务建议消息 |
-| `ResearchWorkspaceDTO` | `/workspaces/*` | `research_workspaces` | 工作区信息 |
-| `KnowledgeBaseDTO` | `/knowledge` | `knowledge_bases` | 知识库容器 |
-| `KnowledgeFileDTO` | `/knowledge/files/*` | `knowledge_files` | 文件/论文资源 |
-| `ResearchTaskDTO` | `/tasks/*` | `research_tasks` | 任务主对象 |
-| `WorkflowNodeDTO` | `/agents/workflows/{id}/nodes` | `workflow_node_runs` | 节点状态 |
-| `TopicExplorationPackageDTO` | 工作区问答增强 | `topic_exploration_packages` | 主题探索包 |
-| `CitationEvidenceDTO` | 消息引用依据 | `citation_evidences` | 引用详情 |
-| `ReportArtifactDTO` | `/tasks/{id}/report` | `report_artifacts` | 报告产物 |
-
-前端组件层不应直接依赖数据库字段名，而应依赖 DTO 名称。
-
-完整接口契约见：
-
-- [API Contract V1](./api-contract-v1.md)
-
-## 4. 聊天层技术路线
-
-聊天层明确参考 AgentChat 的实现方式，但按 PaperChatAgent 的业务语义重新组织资源。
-
-固定设计：
-
-- 使用 LangChain 作为聊天模型与 RAG 编排基础层
-- 使用 LangGraph 组织轻量聊天图，而不是在 FastAPI 路由里直接手写 token 流
-- 业务层面对聊天模型统一依赖 `BaseChatModel` 抽象接口
-- provider 工厂内部优先通过 LangChain `ChatOpenAI` 创建 OpenAI-compatible 聊天客户端
-- 保留 AgentChat 的多模型配置思想：
-  - `conversation_model`
-  - `tool_call_model`
-  - `reasoning_model`
-  - `qwen_vl`
-  - `embedding`
-  - `rerank`
-  - `text2image`
-- RAG 能力参考 AgentChat 的组织方式：
-  - 查询改写
-  - 混合检索
-  - 重排序
-  - 注入问答上下文
-- 聊天图默认拆为三个节点：
-  - `load_context`
-  - `maybe_retrieve_context`
-  - `call_model`
-
-聊天服务建议分层：
-
-- `chat service`
-- `langchain model manager`
-- `rag handler`
-- `stream service`
-
-聊天流职责边界：
-
-- `LangGraph / LangChain`：
-  - 产生 `messages / updates / custom` 内部流
-- `stream service`：
-  - 将内部流映射为业务事件：
-    - `message.delta`
-    - `message.progress`
-    - `message.tool`
-    - `message.info`
-- `FastAPI SSE route`：
-  - 负责发送 `event:` + `data:`
-  - 发送心跳
-  - 处理客户端断开
-  - 补充 `message.started / message.completed / message.failed`
-
-当前 provider 默认实现：
-
-- `conversation_model / tool_call_model / reasoning_model / qwen_vl`
-  - 使用 `ChatOpenAI(base_url=..., api_key=..., model=...)`
-- `embedding`
-  - 使用 OpenAI-compatible embedding 客户端
-- `rerank / text2image`
-  - 使用轻量 HTTP client 封装
-
-实现约束：
-
-- provider 工厂层只负责“按配置返回具体客户端”
-- 配置不完整时 fail fast，返回明确错误
-- 业务代码不直接 import 具体 provider 实现类
-
-### 4.2 前端聊天实现细节
-
-默认聊天页前端建议拆为：
-
-- `ChatPage`
-  - 页面容器，负责布局和路由入口
-- `ConversationSidebar`
-  - 左侧最近会话列表
-- `MessageList`
-  - 消息列表
-- `Composer`
-  - 输入框、上传按钮、发送按钮
-- `NewConversationButton`
-  - 新聊天入口
-
-聊天页布局约束：
-
-- 顶部 header 固定
-- 底部 composer 固定
-- 中间消息区独立滚动
-- 不展示右侧 rail 面板
-- 每条消息支持 Markdown 渲染与复制
-
-Pinia 建议拆分以下 store：
+### 4.3 Pinia Store 建议
 
 - `authStore`
-  - 当前用户、恢复登录态、登出
 - `conversationStore`
-  - 最近会话列表、当前会话、消息列表、assistant draft、SSE 流
 - `knowledgeStore`
-  - 知识库、文件上传状态、绑定关系
+- `agentsStore`
 - `taskStore`
-  - 任务列表、任务详情、任务进度流
+- `modelStore`
+- `mcpStore`
+- `skillsStore`
+- `dashboardStore`
 - `uiStore`
-  - 抽屉、面板、主题、局部页面状态
 
-### 4.3 Element Plus 使用原则
+## 5. 后端方案
 
-组件实现建议基于 Element Plus，优先使用现成组件而不是手搓基础交互：
+### 5.1 服务拆分
 
-- 表单：`el-form`
-- 输入：`el-input`
-- 选择器：`el-select`
-- 表格：`el-table`
-- 抽屉/弹窗：`el-drawer` / `el-dialog`
-- Tabs：`el-tabs`
-- 菜单：`el-menu`
-- 上传：`el-upload`
-- 消息反馈：`el-message` / `el-notification`
-- 加载态：`el-skeleton` / `el-loading`
+建议采用以下服务边界：
+
+- `auth service`
+- `chat service`
+- `knowledge service`
+- `agent registry service`
+- `mcp registry service`
+- `skill registry service`
+- `model router service`
+- `task service`
+- `dashboard service`
+- `storage service`
+
+### 5.2 API 风格
+
+V1 采用：
+
+- `REST` 作为资源接口
+- `SSE` 作为聊天流和任务进度流
+
+不采用：
+
+- 以 WebSocket 为默认协议
+- 以 GraphQL 为主资源接口
+
+### 5.3 DTO 原则
+
+前后端必须围绕稳定 DTO 开发，组件层不能直接依赖底层表字段。
+
+建议首批 DTO：
+
+- `CurrentUserDTO`
+- `ChatSessionDTO`
+- `MessageDTO`
+- `KnowledgeBaseDTO`
+- `KnowledgeFileDTO`
+- `ResearchTaskDTO`
+- `WorkflowRunDTO`
+- `WorkflowNodeRunDTO`
+- `AgentWorkflowDTO`
+- `McpServerConfigDTO`
+- `SkillConfigDTO`
+- `ModelRouteConfigDTO`
+- `DashboardOverviewDTO`
+
+## 6. 聊天编排方案
+
+### 6.1 主职责
+
+聊天服务负责：
+
+- 读取会话上下文
+- 读取会话级长期摘要
+- 判断当前可用知识库
+- 交给模型决定是否检索或调用工具
+- 把结果通过 SSE 回传给前端
+
+### 6.2 推荐执行链
+
+聊天服务推荐链路如下：
+
+1. `load_session_context`
+2. `load_bound_knowledge`
+3. `decide_retrieval_or_tool_use`
+4. `run_retrieval_if_needed`
+5. `run_tool_calls_if_needed`
+6. `call_model`
+7. `persist_messages`
 
 说明：
 
-- 工作台类产品更适合稳健的业务组件，不建议从一开始就追求大量自定义基础控件
-- 设计稿中的布局、配色、间距仍然由项目主题层统一覆盖，不直接照搬 Element 默认视觉
+- 模型不是每轮都必须检索知识库
+- 模型不是每轮都必须调用智能体 / MCP / Skills
+- 这些行为由聊天阶段上下文和模型判断共同决定
 
-### 4.4 聊天与知识检索关系
+### 6.3 SSE 事件
 
-- 聊天前端当前主对象是 `ChatSession`
-- 用户主心智为“最近会话”而不是“工作区分组”
-- 聊天记忆当前采用会话级隔离：
-  - 短期记忆：最近消息窗口
-  - 长期记忆：会话摘要
-- 本轮聊天主流程不依赖工作区上下文检索
+聊天 SSE 继续采用：
 
-## 5. 认证方案
+- `message.started`
+- `message.delta`
+- `message.progress`
+- `message.tool`
+- `message.info`
+- `message.completed`
+- `message.failed`
+- `ping`
 
-认证吸收 AgentChat “同时支持 cookies + headers”的能力，但冻结浏览器正式链路为 `Cookie 优先`。
+`message.tool` 可用于表示：
 
-V1 推荐策略：
+- 知识检索
+- 智能体调用
+- MCP 调用
+- Skill 调用
 
-- 登录成功后，服务端写入 access / refresh `HttpOnly Cookie`
-- 前端通过 `GET /me` 恢复登录态，不在浏览器主链路持久化 access token
-- 普通 JSON API 统一开启 `withCredentials: true`
-- SSE 请求统一开启 `credentials: "include"`
-- 对脚本或特殊调用场景，保留 Header 传 token 兼容能力
-- 后端保护接口同时支持：
-  - cookie
-  - `Authorization: Bearer <token>`
+### 6.4 当前实现差异
 
-默认参数：
+当前代码中的聊天图仍然更接近：
 
-- access token：1 天
-- refresh token：30 天
-- `SameSite=Lax`
-- 生产环境 `Secure=true`
+- `load_context`
+- `maybe_retrieve_context`
+- `call_model`
 
-V1 不做：
+它尚未完整实现自主工具路由，但文档口径以目标链路为准。
 
-- OAuth 第三方登录
-- 多角色权限系统
-- 细粒度 RBAC
+## 7. 知识库方案
 
-## 6. 配置策略
+### 7.1 模块职责
 
-### 6.1 配置文件
+知识库负责：
 
-V1 配置采用：
+- 知识库创建与命名
+- 文件上传与导入
+- 文档解析
+- 文本切片
+- 向量化
+- 检索来源管理
 
-- `config.example.yaml`：示例配置
-- `config.yaml`：本地实际配置
+### 7.2 资料进入方式
 
-YAML 中至少包含以下配置段：
+- 用户在知识库页面手动创建并上传
+- 用户在聊天阶段上传资料并绑定到已有知识库
+- 系统在聊天中建议创建新知识库，用户确认后自动落库
+
+### 7.3 检索策略
+
+- 检索不是强制前置动作
+- 模型在聊天中自主判断是否需要检索
+- 检索结果只作为回答辅助上下文，而不是替代聊天
+
+## 8. 智能体方案
+
+### 8.1 模块职责
+
+智能体模块负责：
+
+- 注册当前可用智能体 / 工作流
+- 暴露工作流定义与节点说明
+- 提供给聊天与任务系统可调用的能力对象
+
+### 8.2 当前默认工作流
+
+当前内置工作流为多节点研究工作流，包含：
+
+- `search`
+- `reading`
+- `analyse`
+- `writing`
+- `report`
+
+### 8.3 运行方式
+
+智能体能力可通过两种方式被消费：
+
+- 在聊天阶段作为工具被调用
+- 在研究任务阶段作为异步工作流执行
+
+### 8.4 扩展性
+
+后续允许新增：
+
+- 其他研究工作流
+- 更轻量的专用智能体
+- 不同场景的工具型智能体
+
+## 9. MCP 与 Skills 方案
+
+### 9.1 MCP 服务
+
+MCP 模块负责：
+
+- 列表展示当前 MCP 配置
+- 导入本地 MCP 服务
+- 新增 MCP 服务配置
+
+### 9.2 Skills
+
+Skills 模块负责：
+
+- 列表展示当前 Skill 配置
+- 导入本地 Skills
+- 新增自定义 Skills
+
+### 9.3 与聊天关系
+
+- MCP / Skills 都是聊天阶段可能调用的能力
+- 它们不是单独主链路
+- 它们的配置和调用结果必须与聊天层解耦
+
+## 10. 模型模块方案
+
+### 10.1 模块职责
+
+模型模块负责：
+
+- 管理供应商与模型配置
+- 管理逻辑模型槽位
+- 将业务请求路由到对应模型
+
+### 10.2 逻辑模型槽位
+
+至少包含：
+
+- `conversation`
+- `tool_call`
+- `reasoning`
+- `embedding`
+- `rerank`
+
+根据需要可继续扩展：
+
+- `vision`
+- `text2image`
+
+### 10.3 配置建议
+
+配置文件应至少包含：
+
+- `provider`
+- `base_url`
+- `api_key`
+- `model_name`
+- `timeout`
+- `metadata`
+
+### 10.4 设计边界
+
+模型模块不负责：
+
+- 业务状态管理
+- 会话管理
+- 任务调度
+
+## 11. 后台任务方案
+
+### 11.1 页面职责
+
+后台任务模块的职责不是“通用任务管理”，而是：
+
+- 展示研究任务
+- 展示工作流运行
+- 展示节点进度
+- 展示结果摘要
+
+### 11.2 状态模型
+
+任务状态建议：
+
+- `queued`
+- `running`
+- `paused`
+- `completed`
+- `failed`
+- `canceled`
+
+节点状态建议：
+
+- `pending`
+- `running`
+- `retrying`
+- `paused`
+- `completed`
+- `failed`
+- `skipped`
+
+### 11.3 当前执行方式
+
+当前版本采用 Python 进程内异步任务：
+
+- 通过 `asyncio.create_task(...)` 启动研究任务
+- 不引入独立 Worker + 队列
+- 节点级状态和 checkpoint 持久化到 MySQL JSON 字段
+
+### 11.4 恢复机制
+
+当前版本的恢复机制必须具备：
+
+- 自动重试：单节点失败后先按策略自动重试
+- 备用模型切换：主模型失败后尝试备用模型覆盖
+- 节点暂停：所有尝试都失败后，将任务停在当前节点
+- 从失败节点续跑：支持恢复当前节点并继续后续节点
+- checkpoint 持久化：每个节点的输入、输出、错误、尝试次数和工作流状态都落库
+
+### 11.5 SSE 事件
+
+任务事件继续采用：
+
+- `task.snapshot`
+- `task.progress`
+- `task.node.started`
+- `task.node.retrying`
+- `task.node.paused`
+- `task.node.completed`
+- `task.node.failed`
+- `task.paused`
+- `task.resumed`
+- `task.completed`
+- `task.failed`
+
+## 12. 数据看板方案
+
+### 12.1 指标范围
+
+首批看板指标建议包括：
+
+- 模型调用次数
+- 输入 token
+- 输出 token
+- 任务总数
+- 任务状态分布
+- 工作流节点平均耗时
+
+### 12.2 数据来源
+
+看板数据可来自：
+
+- 请求日志
+- 模型调用日志
+- 任务运行日志
+- 聚合后的统计表或物化视图
+
+## 13. 配置方案
+
+配置文件建议包含以下段：
 
 - `server`
 - `mysql`
-- `redis`
 - `storage`
 - `vector_db`
-- `multi_models`
-- `search`
+- `model_routes`
+- `mcp`
+- `skills`
 
-### 6.2 地址示例
+## 14. 当前实现兼容说明
 
-配置示例以本机地址为默认例子，例如：
+当前代码与目标文档之间存在以下过渡差异：
 
-```yaml
-server:
-  host: "127.0.0.1"
-  port: 8000
+- 当前前端页面仍沿用部分 `workbench` 命名
+- 当前后端仍保留 `workspace` 相关表结构
+- `knowledge_bases`、`mcp`、`skills`、`models`、`dashboard` 等模块尚未完整落地为真实 API
+- 当前任务执行明确采用应用进程内异步运行器
 
-mysql:
-  endpoint: "mysql+pymysql://root:password@127.0.0.1:3306/paperchatagent"
-  async_endpoint: "mysql+aiomysql://root:password@127.0.0.1:3306/paperchatagent"
+这些差异都属于实现过渡期，不改变目标产品和技术口径。
 
-redis:
-  endpoint: "redis://127.0.0.1:6379"
+## 15. 结论
 
-storage:
-  mode: "minio"
-  minio:
-    endpoint: "127.0.0.1:9000"
-    access_key_id: "minioadmin"
-    access_key_secret: "minioadmin"
-    bucket_name: "paperchatagent"
+PaperChatAgent V1 的技术方案可以概括为：
 
-multi_models:
-  conversation_model:
-    api_key: "your-key"
-    base_url: "https://your-openai-compatible-endpoint/v1"
-    model_name: "gpt-4o-mini"
-  tool_call_model:
-    api_key: "your-key"
-    base_url: "https://your-openai-compatible-endpoint/v1"
-    model_name: "gpt-4o-mini"
-  reasoning_model:
-    api_key: "your-key"
-    base_url: "https://your-reasoning-endpoint/v1"
-    model_name: "deepseek-reasoner"
-  qwen_vl:
-    api_key: "${DASHSCOPE_API_KEY}"
-    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model_name: "qwen-vl-plus"
-  embedding:
-    api_key: "your-key"
-    base_url: "https://your-embedding-endpoint/v1"
-    model_name: "text-embedding-3-large"
-  rerank:
-    api_key: "your-key"
-    base_url: "https://your-rerank-endpoint/v1"
-    model_name: "rerank-model"
-  text2image:
-    api_key: "${DASHSCOPE_API_KEY}"
-    base_url: "https://your-text2image-endpoint"
-    model_name: "text2image-model"
-```
-
-## 7. 工作流实现路线
-
-### 7.1 总体策略
-
-工作流层明确采用 `AutoGen + LangGraph` 双栈：
-
-- `LangGraph`：负责全局状态机、节点顺序、条件流转、错误处理
-- `AutoGen`：负责节点内部智能体协作、人工审查代理、并行写作协作
-
-### 7.2 完整工作流节点
-
-工作流完整吸收 Paper-Agent 的节点设计：
-
-1. `search_agent_node`
-2. `reading_agent_node`
-3. `analyse_agent_node`
-4. `writing_agent_node`
-5. `report_agent_node`
-
-### 7.3 节点内智能体
-
-参考 Paper-Agent，关键节点内部能力如下：
-
-- `search_agent_node`
-  - `search_agent`
-  - `userProxyAgent`
-- `reading_agent_node`
-  - 并行 `read_agent`
-- `analyse_agent_node`
-  - `PaperClusterAgent`
-  - `DeepAnalyseAgent`
-  - `GlobalanalyseAgent`
-- `writing_agent_node`
-  - `writing_director_agent`
-  - `writing_agent`
-  - `retrieval_agent`
-  - `review_agent`
-- `report_agent_node`
-  - `report_agent`
-
-### 7.4 与当前项目的融合方式
-
-PaperChatAgent 不把 Paper-Agent 当成独立外挂模块，而是把其工作流概念融入当前项目模型：
-
-- 工作流输入来自聊天页与工作区上下文
-- 工作流中间结果写入知识库与任务状态
-- 工作流输出写入主题探索包、报告工件和问答上下文
-- 前端通过任务页与聊天页消费这些结果
-
-## 8. 本地运行边界
-
-### 8.1 支持两种方式
-
-V1 文档同时支持：
-
-- Docker Compose 启动依赖服务
-- 本机直连方式配置本地服务
-
-推荐顺序：
-
-- 优先使用 Docker Compose 起 MySQL / Redis / MinIO / Chroma
-- 如果开发者本地已经有常驻服务，则允许通过 YAML 直连
-
-### 8.2 不纳入本轮的内容
-
-- 生产部署编排
-- 云资源配置
-- CI/CD
-- 日志采集与告警平台
-
-## 9. 模型接入策略
-
-### 9.1 Provider abstraction
-
-从 V1 开始保留模型抽象层，不把业务代码写死到单一供应商。原因：
-
-- 对话、工具调用、推理、Embedding、Rerank 的最优模型通常不同
-- 后续切换 OpenAI 兼容服务或私有部署时成本更低
-- 便于测试不同组合
-
-### 9.2 路由建议
-
-至少定义以下逻辑模型槽位：
-
-- `conversation_model`
-- `tool_call_model`
-- `reasoning_model`
-- `qwen_vl`
-- `embedding`
-- `rerank`
-- `text2image`
-
-### 9.3 Provider 层职责
-
-- 接收统一配置
-- 对外暴露一致调用接口
-- 处理不同服务商的 base_url / headers / auth 差异
-
-Provider 层不负责：
-
-- 工作区语义
-- 任务调度
-- 业务状态管理
-
-## 10. 首批后端目录建议
-
-```text
-apps/backend/
-└── paperchat/
-    ├── main.py
-    ├── settings.py
-    ├── config.example.yaml
-    ├── api/
-    │   ├── responses/
-    │   ├── errcode/
-    │   ├── router.py
-    │   └── v1/
-    ├── auth/
-    ├── middleware/
-    ├── core/
-    │   ├── callbacks/
-    │   └── runtime/
-    ├── services/
-    │   ├── chat/
-    │   ├── workspace/
-    │   ├── knowledge/
-    │   ├── task/
-    │   ├── rag/
-    │   ├── rewrite/
-    │   └── storage/
-    ├── database/
-    │   ├── models/
-    │   └── dao/
-    ├── workflows/
-    │   ├── graph/
-    │   ├── nodes/
-    │   └── agents/
-    ├── tasks/
-    ├── storage/
-    ├── schemas/
-    └── providers/
-```
-
-各目录职责：
-
-- `api/`：REST 与 SSE 路由
-- `api/responses/`：统一响应对象
-- `api/errcode/`：错误码定义
-- `auth/`：JWT 认证和登录态逻辑
-- `middleware/`：Trace ID、CORS、白名单、审计中间件
-- `core/`：运行时公共能力和回调
-- `services/`：业务服务层
-- `services/chat/`：聊天服务
-- `services/workspace/`：工作区服务
-- `services/knowledge/`：知识库服务
-- `services/task/`：任务服务
-- `services/rag/`：RAG 检索服务
-- `services/rewrite/`：查询改写
-- `services/storage/`：对象存储服务
-- `database/`：数据模型与数据访问层
-- `workflows/graph/`：LangGraph 图定义
-- `workflows/nodes/`：search/reading/analyse/writing/report 节点
-- `workflows/agents/`：AutoGen 代理定义
-- `tasks/`：Worker 任务执行逻辑
-- `storage/`：MinIO 与对象存储抽象
-- `providers/`：LangChain / 模型供应商抽象层
-
-## 11. 首批前端目录建议
-
-```text
-apps/frontend/
-├── src/
-│   ├── apis/
-│   ├── components/
-│   │   ├── chat/
-│   │   ├── workspace/
-│   │   ├── knowledge/
-│   │   ├── agents/
-│   │   └── tasks/
-│   ├── pages/
-│   │   ├── login/
-│   │   ├── chat/
-│   │   ├── workspace/
-│   │   ├── knowledge/
-│   │   ├── agents/
-│   │   └── tasks/
-│   ├── router/
-│   ├── stores/
-│   ├── layouts/
-│   ├── types/
-│   └── utils/
-├── package.json
-├── pnpm-lock.yaml
-└── vite.config.ts
-```
-
-前端目录补充说明：
-
-- `apis/`：按资源拆分 API client
-- `stores/`：Pinia store
-- `types/`：前后端共享的前端 DTO 类型定义
-- `layouts/`：工作台主布局、认证布局
-- `components/`：页面级复用业务组件，而不是只放基础组件
-
-## 12. 首批接口资源边界
-
-### 12.1 Auth
-
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/refresh`
-- `POST /auth/logout`
-- `GET /me`
-
-### 12.2 Inbox / Chat
-
-- `GET /conversations`
-- `POST /conversations`
-- `GET /conversations/inbox`
-- `GET /conversations/{id}/messages`
-- `POST /conversations/{id}/messages/stream`
-
-### 12.3 Workspace
-
-- `POST /workspaces`
-- `GET /workspaces`
-- `GET /workspaces/{id}`
-- `POST /workspaces/{id}/share-link`
-
-### 12.4 Knowledge
-
-- `GET /knowledge`
-- `POST /knowledge/files/upload`
-- `POST /knowledge/import/arxiv`
-- `POST /knowledge/attach`
-
-### 12.5 Task
-
-- `POST /tasks`
-- `GET /tasks`
-- `GET /tasks/{id}`
-- `GET /tasks/{id}/events`
-- `POST /tasks/{id}/retry`
-- `GET /tasks/{id}/report`
-
-### 12.6 Agent / Workflow
-
-- `GET /agents/workflows`
-- `GET /agents/workflows/{id}`
-- `GET /agents/workflows/{id}/nodes`
-
-## 13. 非目标
-
-本轮技术方案不包括：
-
-- 字段级数据库 migration 细节
-- 正式生产部署方案
-- 复杂多租户权限设计
-- GraphQL / WebSocket 主体架构切换
-
-## 14. 端到端实现流程详解
-
-本节按真实业务顺序说明当前技术文档所要求的实现路径：
-
-`注册 -> 登录 -> 默认聊天 -> 确定研究领域 -> 确认任务 -> 执行完整工作流 -> 回流问答`
-
-### 14.1 注册
-
-接口：
-
-- `POST /auth/register`
-
-建议请求体：
-
-```json
-{
-  "email": "user@example.com",
-  "password": "plain-password",
-  "display_name": "alice"
-}
-```
-
-后端行为：
-
-1. 校验邮箱唯一性
-2. 对密码做 hash
-3. 创建 `users`
-4. 创建该用户的 `inbox_conversations`
-5. 创建默认 `chat_sessions`，其 `session_scope = inbox`
-
-建议响应：
-
-```json
-{
-  "user_id": "uuid",
-  "inbox_conversation_id": "uuid",
-  "default_session_id": "uuid"
-}
-```
-
-实现约束：
-
-- V1 不做邮箱验证码
-- 注册成功后即可登录
-
-### 14.2 登录
-
-接口：
-
-- `POST /auth/login`
-- `POST /auth/refresh`
-
-后端行为：
-
-1. 校验用户邮箱与密码
-2. 签发 access / refresh JWT
-3. 写入 HttpOnly Cookie
-4. 创建 `user_sessions`
-
-补充接口：
-
-- `GET /me`
-- `POST /auth/logout`
-
-实现约束：
-
-- `GET /me` 用于前端恢复登录态
-- 登出时需要吊销或标记 `user_sessions.revoked_at`
-- `POST /auth/refresh` 使用 refresh cookie 续期登录会话
-
-### 14.3 打开聊天页
-
-接口：
-
-- `GET /conversations`
-- `GET /conversations/{id}/messages`
-
-后端行为：
-
-1. 返回当前用户最近会话列表
-2. 若用户尚无会话，则自动创建一个默认会话
-3. 返回当前选中会话的消息历史
-
-前端行为：
-
-- 登录成功后默认进入聊天页
-- 左侧展示最近会话
-- 用户可创建新聊天并切换历史会话
-- 如果当前会话没有消息，则展示空白引导态
-
-### 14.4 聊天确定研究领域
-
-接口：
-
-- `POST /conversations/{id}/messages/stream`
-
-处理路径：
-
-1. 前端提交用户消息
-2. 后端写入一条 `messages(role=user, message_type=chat)`
-3. Chat service 构建轻量 LangGraph chat graph：
-   - `load_context`
-   - `maybe_retrieve_context`
-   - `call_model`
-4. `load_context` 读取当前会话记忆：
-   - 最近消息窗口
-   - 当前会话长期摘要
-5. `maybe_retrieve_context` 当前不做工作区检索，只保留轻量上下文占位
-6. 图内通过 `graph.astream(..., stream_mode=["messages", "updates", "custom"], version="v2")` 产生内部流
-7. FastAPI SSE 层将内部流翻译为业务事件：
-   - `message.started`
-   - `message.delta`
-   - `message.progress`
-   - `message.tool`
-   - `message.info`
-   - `message.completed`
-   - `message.failed`
-   - `ping`
-8. AI 回复完成后一次性写入正式 assistant 消息
-9. 若当前会话达到摘要阈值，则更新该会话长期摘要
-
-此阶段目标：
-
-- 让用户像 ChatGPT 一样直接进入会话式聊天
-- 在不跨会话串话的前提下保持连续上下文
-- 允许用户上传 PDF 并参与当前会话上下文
-
-持久化约束：
-
-- assistant 消息不做占位消息更新
-- 若流失败，不写半成品 assistant 消息
-- 引用依据仅在 `message.completed` 后写入 `citation_evidences`
-- 会话级长期记忆写回 `chat_sessions.memory_summary_text`
-
-### 14.5 上传论文 / 资料
-
-接口：
-
-- `POST /knowledge/files/upload`
-- `POST /knowledge/import/arxiv`
-
-建议策略：
-
-- 用户第一次上传资料时，如果还没有账号级全局知识库，则自动创建一个 `scope = global` 的 `knowledge_bases`
-- 上传成功后创建一条 `knowledge_files`
-- 后续由 worker 负责解析与索引
-
-如果上传发生在聊天过程中：
-
-- 前端应把上传结果与当前 `chat_sessions` 关联显示
-- 但资料主归属仍然是知识库，而不是消息表
-
-### 14.6 AI 给出研究任务建议
-
-此阶段不是单独页面，而是聊天结果中的一种结构化消息。
-
-建议做法：
-
-- AI 生成任务建议时，将 assistant 消息写成：
-  - `message_type = task_suggestion`
-  - `content_json` 中包含：
-    - topic
-    - keywords
-    - date_range
-    - selected_sources
-    - selected_files
-
-这样前端可以直接渲染确认面板，而不是靠纯文本解析。
-
-### 14.7 用户确认并创建研究任务
-
-接口：
-
-- `POST /tasks`
-
-建议请求体：
-
-```json
-{
-  "source_session_id": "uuid",
-  "workspace_name": "多智能体论文问答",
-  "topic": "面向科研人员和学生的论文问答工作台",
-  "keywords": ["多智能体", "论文问答", "工作区"],
-  "source_config": {
-    "arxiv": true,
-    "uploaded_files": ["knowledge-file-id-1"]
-  }
-}
-```
-
-后端行为：
-
-1. 若未指定已有工作区，则创建 `research_workspaces`
-2. 创建 `research_tasks`
-3. 创建 `workflow_runs`
-4. 初始化 5 条 `workflow_node_runs`
-5. 若任务需要引用知识库或文件，则创建 `workspace_knowledge_links`
-6. 将任务投递到 Redis
-
-建议默认节点顺序：
-
-1. `search_agent_node`
-2. `reading_agent_node`
-3. `analyse_agent_node`
-4. `writing_agent_node`
-5. `report_agent_node`
-
-### 14.8 执行完整工作流
-
-执行端：
-
-- `apps/worker`
-
-工作流职责拆分：
-
-- LangGraph：
-  - 维护全局状态对象
-  - 负责节点跳转
-  - 负责条件边与错误边
-- AutoGen：
-  - 节点内部智能体协作
-  - `userProxyAgent`
-  - `read_agent`
-  - `PaperClusterAgent`
-  - `DeepAnalyseAgent`
-  - `GlobalanalyseAgent`
-  - `writing_agent`
-  - `retrieval_agent`
-  - `review_agent`
-  - `report_agent`
-
-每个节点完成时需要：
-
-1. 更新 `workflow_node_runs.status`
-2. 更新 `research_tasks.current_node`
-3. 更新 `research_tasks.progress_percent`
-4. 将必要的中间结果写回数据库
-
-### 14.9 各节点落库要求
-
-#### `search_agent_node`
-
-- 写入或更新：
-  - `workflow_node_runs`
-  - `research_papers`
-- 如果需要人工确认：
-  - 状态保持在 `pending review` 的扩展态可落在 `trace_json` 或 `metadata_json`
-
-#### `reading_agent_node`
-
-- 写入或更新：
-  - `extracted_papers`
-  - `knowledge_chunks`
-  - `knowledge_files.parser_status`
-  - `knowledge_files.index_status`
-
-#### `analyse_agent_node`
-
-- 写入或更新：
-  - `analysis_clusters`
-  - `analysis_cluster_papers`
-  - `analysis_reports`
-
-#### `writing_agent_node`
-
-- 写入或更新：
-  - `writing_outlines`
-  - `writing_sections`
-
-#### `report_agent_node`
-
-- 写入或更新：
-  - `report_artifacts`
-  - `topic_exploration_packages`
-
-### 14.10 任务进度推送
-
-接口：
-
-- `GET /tasks/{id}/events`
-
-SSE 事件建议至少包含：
-
-- `task.snapshot`
-- `task.created`
-- `task.node.started`
-- `task.node.completed`
-- `task.node.failed`
-- `task.progress`
-- `task.completed`
-- `task.failed`
-- `task.canceled`
-
-前端任务页与聊天页都可订阅这条流。
-
-实现约束：
-
-1. SSE 连接建立后先读取数据库并发送当前任务快照
-2. 再桥接 Redis Pub/Sub 实时事件
-3. 事件载荷至少包含：
-   - `task_id`
-   - `status`
-   - `current_node`
-   - `progress_percent`
-   - `detail`
-   - `occurred_at`
-
-### 14.11 工作流完成后的回流问答
-
-任务完成后，聊天不应重新从零开始，而应切换到“工作区增强问答”模式。
-
-实现方式：
-
-1. 在工作区绑定 `topic_exploration_packages`
-2. 工作区问答时优先检索：
-   - `topic_exploration_packages`
-   - `analysis_reports`
-   - `writing_sections`
-   - `report_artifacts`
-   - `knowledge_chunks`
-3. 回答生成后写入：
-   - `messages`
-   - `citation_evidences`
-
-### 14.12 当前需要你确认的实现细节
-
-基于当前文档，我认为以下实现默认值最合适，除非你后续明确改动：
-
-1. 注册成功后自动创建：
-   - `inbox_conversations`
-   - 一个默认 `chat_sessions`
-2. 用户第一次上传文件时自动创建账号级全局知识库
-3. `POST /tasks` 若不指定现有工作区，则自动创建新工作区
-4. 完整工作流默认执行到 `report_agent_node`，而不是停在分析节点
-
-如果你认可这 4 条，后续实现就可以直接按这版文档走。
+- 以会话为主对象
+- 以聊天为总调度入口
+- 以知识库、智能体、MCP、Skills、模型、后台任务、看板作为独立模块
+- 以模型自主决策检索与工具调用
+- 以后台任务页持续展示智能体执行进度

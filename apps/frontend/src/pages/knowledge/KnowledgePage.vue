@@ -16,25 +16,23 @@ onMounted(() => {
   <section class="page-shell">
     <header class="page-header">
       <div>
-        <h2>知识库</h2>
-        <p>管理账号资料，支持 arXiv 引入和 PDF 上传。</p>
+        <h2>知识库列表</h2>
+        <p>按知识库名称管理资料容器。点击某个知识库后，可进入详情页查看相关文件与解析状态。</p>
       </div>
       <div class="page-actions">
-        <el-button>上传 PDF</el-button>
-        <el-button type="primary">新建私有库</el-button>
+        <el-button>上传文件</el-button>
+        <el-button type="primary">新建知识库</el-button>
       </div>
     </header>
 
     <div class="toolbar-search">
-      <el-input placeholder="搜索论文标题、作者或来源..." />
+      <el-input placeholder="搜索知识库名称、描述或最近上传文件..." />
     </div>
 
     <div class="knowledge-grid">
       <div style="display: grid; gap: 20px;">
-        <KnowledgeSectionCard v-if="knowledgeStore.globalBase" :section="knowledgeStore.globalBase" />
-        <EmptyState v-else text="当前没有全局知识库内容。" />
-        <KnowledgeSectionCard v-if="knowledgeStore.privateBase" :section="knowledgeStore.privateBase" two-columns />
-        <EmptyState v-else text="当前没有额外的私有资料内容。" />
+        <KnowledgeSectionCard v-if="knowledgeStore.library" :section="knowledgeStore.library" two-columns />
+        <EmptyState v-else text="当前没有资料内容。" />
       </div>
 
       <aside class="rail">

@@ -16,12 +16,12 @@ onMounted(() => {
   <section class="page-shell">
     <header class="page-header">
       <div>
-        <h2>智能体</h2>
-        <p>展示预置研究智能体的工作流编排视图，帮助用户理解搜索、阅读、分析与结果回流链路。</p>
+        <h2>智能体列表</h2>
+        <p>查看内置和自定义智能体。点击智能体后，可进入详情页配置节点模型、执行器与传递规则。</p>
       </div>
       <div class="page-actions">
-        <el-button>查看节点说明</el-button>
-        <el-button type="primary">运行研究智能体</el-button>
+        <el-button>导入配置</el-button>
+        <el-button type="primary">新建智能体</el-button>
       </div>
     </header>
 

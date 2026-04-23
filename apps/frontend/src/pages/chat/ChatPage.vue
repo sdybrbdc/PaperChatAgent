@@ -44,13 +44,13 @@ async function handleSend() {
     <header class="page-header">
       <div>
         <h2>{{ conversationStore.currentSession?.title ?? '新聊天' }}</h2>
-        <p>直接开始聊天，历史会话会自动保存在左侧列表中。</p>
+        <p>先像普通聊天一样了解方向；当问题逐渐清晰时，界面会动态整理研究提示与可执行草案。</p>
       </div>
       <div class="page-actions">
         <el-button>上传资料</el-button>
         <el-button type="primary" @click="handleCreateConversation">
           <el-icon><Plus /></el-icon>
-          新聊天
+          生成研究草案
         </el-button>
       </div>
     </header>
