@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,51 +39,17 @@ class PaperChatUserSessionRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
-class PaperChatInboxConversationRecord(Base):
-    __tablename__ = "paperchat_inbox_conversations"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("paperchat_users.id"), nullable=False, unique=True, index=True
-    )
-    title: Mapped[str] = mapped_column(String(255), nullable=False, default="默认收件箱会话")
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
-    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
-
-
-class PaperChatWorkspaceRecord(Base):
-    __tablename__ = "paperchat_workspaces"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
-    share_token: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
-
-
-class PaperChatSessionRecord(Base):
-    __tablename__ = "paperchat_chat_sessions"
+class PaperChatConversationRecord(Base):
+    __tablename__ = "paperchat_conversations"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    scope: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
-    workspace_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("paperchat_workspaces.id"), nullable=True, index=True
-    )
-    inbox_conversation_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("paperchat_inbox_conversations.id"), nullable=True, index=True
-    )
-    memory_summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    last_summarized_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    title_finalized: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    completed_turn_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_message_preview: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -92,8 +58,8 @@ class PaperChatMessageRecord(Base):
     __tablename__ = "paperchat_messages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("paperchat_chat_sessions.id"), nullable=False, index=True
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_conversations.id"), nullable=False, index=True
     )
     user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -104,39 +70,28 @@ class PaperChatMessageRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, index=True)
 
 
-class PaperChatResearchTaskRecord(Base):
-    __tablename__ = "paperchat_research_tasks"
+class PaperChatConversationGuidanceSnapshotRecord(Base):
+    __tablename__ = "paperchat_conversation_guidance_snapshots"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
-    workspace_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("paperchat_workspaces.id"), nullable=False, index=True
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_conversations.id"), primary_key=True
     )
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
-    current_node: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    progress_percent: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    checkpoint_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="casual_chat")
+    headline: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sections_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    draft_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
-class PaperChatKnowledgeFileRecord(Base):
-    __tablename__ = "paperchat_knowledge_files"
+class PaperChatConversationRealtimeEventRecord(Base):
+    __tablename__ = "paperchat_conversation_realtime_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
-    workspace_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("paperchat_workspaces.id"), nullable=True, index=True
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_conversations.id"), nullable=False, index=True
     )
-    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    title: Mapped[str] = mapped_column(String(512), nullable=False)
-    source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    parser_status: Mapped[str] = mapped_column(String(32), nullable=False, default="uploaded")
-    index_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
-    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, index=True)

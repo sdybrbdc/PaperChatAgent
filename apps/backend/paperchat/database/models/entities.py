@@ -32,39 +32,15 @@ class UserSession:
 
 
 @dataclass
-class InboxConversation:
-    id: str
-    user_id: str
-    title: str = "默认收件箱会话"
-    status: str = "active"
-    summary: str = ""
-    last_message_at: datetime | None = None
-    created_at: datetime = field(default_factory=utcnow)
-    updated_at: datetime = field(default_factory=utcnow)
-
-
-@dataclass
-class ChatSession:
+class Conversation:
     id: str
     user_id: str
     title: str
-    scope: str
     status: str = "active"
-    workspace_id: str | None = None
-    inbox_conversation_id: str | None = None
+    title_finalized: bool = False
+    completed_turn_count: int = 0
+    last_message_preview: str = ""
     last_message_at: datetime | None = None
-    created_at: datetime = field(default_factory=utcnow)
-    updated_at: datetime = field(default_factory=utcnow)
-
-
-@dataclass
-class ResearchWorkspace:
-    id: str
-    user_id: str
-    name: str
-    description: str = ""
-    status: str = "active"
-    share_token: str | None = None
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
 
@@ -72,7 +48,7 @@ class ResearchWorkspace:
 @dataclass
 class Message:
     id: str
-    session_id: str
+    conversation_id: str
     user_id: str | None
     role: str
     message_type: str
@@ -83,16 +59,21 @@ class Message:
 
 
 @dataclass
-class ResearchTask:
-    id: str
-    user_id: str
-    workspace_id: str
-    title: str
-    status: str = "queued"
-    current_node: str | None = None
-    progress_percent: float = 0.0
-    detail: str = ""
-    payload_json: dict = field(default_factory=dict)
-    checkpoint_json: dict = field(default_factory=dict)
+class ConversationGuidanceSnapshot:
+    conversation_id: str
+    status: str = "casual_chat"
+    headline: str = ""
+    sections: list[dict] = field(default_factory=list)
+    draft: dict | None = None
+    source_message_id: str | None = None
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
+
+
+@dataclass
+class ConversationRealtimeEvent:
+    id: str
+    conversation_id: str
+    event_type: str
+    payload: dict = field(default_factory=dict)
+    created_at: datetime = field(default_factory=utcnow)

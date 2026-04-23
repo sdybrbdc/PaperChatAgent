@@ -46,6 +46,10 @@ def get_autogen_conversation_model_client() -> OpenAIChatCompletionClient:
     return get_autogen_model_client("conversation_model", function_calling=False)
 
 
+def get_autogen_guidance_model_client() -> OpenAIChatCompletionClient:
+    return get_autogen_model_client("guidance_model", function_calling=False)
+
+
 def get_autogen_tool_call_model_client() -> OpenAIChatCompletionClient:
     return get_autogen_model_client("tool_call_model", function_calling=True)
 

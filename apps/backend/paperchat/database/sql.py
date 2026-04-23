@@ -22,21 +22,66 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+LEGACY_DROP_ORDER = [
+    "paperchat_research_tasks",
+    "paperchat_knowledge_files",
+    "paperchat_chat_sessions",
+    "paperchat_workspaces",
+    "paperchat_inbox_conversations",
+]
+
+CHAT_SCHEMA_REQUIRED_COLUMNS: dict[str, set[str]] = {
+    "paperchat_conversations": {
+        "id",
+        "user_id",
+        "title",
+        "status",
+        "title_finalized",
+        "completed_turn_count",
+        "last_message_preview",
+        "last_message_at",
+        "created_at",
+        "updated_at",
+    },
+    "paperchat_messages": {
+        "id",
+        "conversation_id",
+        "user_id",
+        "role",
+        "message_type",
+        "content",
+        "metadata_json",
+        "citations_json",
+        "created_at",
+    },
+    "paperchat_conversation_guidance_snapshots": {
+        "conversation_id",
+        "status",
+        "headline",
+        "sections_json",
+        "draft_json",
+        "source_message_id",
+        "created_at",
+        "updated_at",
+    },
+    "paperchat_conversation_realtime_events": {
+        "id",
+        "conversation_id",
+        "event_type",
+        "payload_json",
+        "created_at",
+    },
+}
+
+
 def ensure_database_exists() -> None:
     url = make_url(settings.mysql.endpoint)
     database_name = url.database
-    if not database_name:
-        return
-
-    if not url.drivername.startswith("mysql"):
+    if not database_name or not url.drivername.startswith("mysql"):
         return
 
     admin_url = url.set(database="mysql")
-    admin_engine = create_engine(
-        admin_url,
-        pool_pre_ping=True,
-        future=True,
-    )
+    admin_engine = create_engine(admin_url, pool_pre_ping=True, future=True)
     try:
         with admin_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
             connection.execute(
@@ -63,59 +108,42 @@ def db_session():
         session.close()
 
 
-def init_database() -> None:
-    from paperchat.database.models.tables import (  # noqa: F401
-        PaperChatSessionRecord,
-        PaperChatInboxConversationRecord,
-        PaperChatKnowledgeFileRecord,
-        PaperChatMessageRecord,
-        PaperChatResearchTaskRecord,
-        PaperChatUserRecord,
-        PaperChatUserSessionRecord,
-        PaperChatWorkspaceRecord,
-    )
-
-    ensure_database_exists()
-    Base.metadata.create_all(bind=engine, checkfirst=True)
-    ensure_runtime_columns()
-
-
-def ensure_runtime_columns() -> None:
+def drop_legacy_tables() -> None:
     inspector = inspect(engine)
-    table_names = inspector.get_table_names()
-    if "paperchat_chat_sessions" not in table_names:
-        return
-
-    existing_columns = {column["name"] for column in inspector.get_columns("paperchat_chat_sessions")}
-    alter_statements: list[str] = []
-
-    if "memory_summary_text" not in existing_columns:
-        alter_statements.append(
-            "ALTER TABLE `paperchat_chat_sessions` "
-            "ADD COLUMN `memory_summary_text` TEXT NULL"
-        )
-    if "last_summarized_message_id" not in existing_columns:
-        alter_statements.append(
-            "ALTER TABLE `paperchat_chat_sessions` "
-            "ADD COLUMN `last_summarized_message_id` VARCHAR(36) NULL"
-        )
-
-    if "paperchat_research_tasks" in table_names:
-        task_columns = {column["name"] for column in inspector.get_columns("paperchat_research_tasks")}
-        if "payload_json" not in task_columns:
-            alter_statements.append(
-                "ALTER TABLE `paperchat_research_tasks` "
-                "ADD COLUMN `payload_json` JSON NULL"
-            )
-        if "checkpoint_json" not in task_columns:
-            alter_statements.append(
-                "ALTER TABLE `paperchat_research_tasks` "
-                "ADD COLUMN `checkpoint_json` JSON NULL"
-            )
-
-    if not alter_statements:
+    existing = set(inspector.get_table_names())
+    statements = [
+        f"DROP TABLE IF EXISTS `{table_name}`"
+        for table_name in LEGACY_DROP_ORDER
+        if table_name in existing
+    ]
+    for table_name, required_columns in CHAT_SCHEMA_REQUIRED_COLUMNS.items():
+        if table_name not in existing:
+            continue
+        actual_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        if not required_columns.issubset(actual_columns):
+            statements.append(f"DROP TABLE IF EXISTS `{table_name}`")
+    if not statements:
         return
 
     with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
-        for statement in alter_statements:
-            connection.execute(text(statement))
+        connection.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+        try:
+            for statement in statements:
+                connection.execute(text(statement))
+        finally:
+            connection.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+
+
+def init_database() -> None:
+    from paperchat.database.models.tables import (  # noqa: F401
+        PaperChatConversationGuidanceSnapshotRecord,
+        PaperChatConversationRealtimeEventRecord,
+        PaperChatConversationRecord,
+        PaperChatMessageRecord,
+        PaperChatUserRecord,
+        PaperChatUserSessionRecord,
+    )
+
+    ensure_database_exists()
+    drop_legacy_tables()
+    Base.metadata.create_all(bind=engine, checkfirst=True)

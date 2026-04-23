@@ -29,9 +29,9 @@ async def create_conversation(request: Request, user=Depends(get_current_user)):
     return ok(request, data=chat_service.create_conversation_payload(user.id))
 
 
-@router.get("/inbox", response_model=APIResponse)
-async def get_inbox(request: Request, user=Depends(get_current_user)):
-    return ok(request, data=chat_service.get_inbox_payload(user.id))
+@router.get("/{conversation_id}", response_model=APIResponse)
+async def get_conversation(conversation_id: str, request: Request, user=Depends(get_current_user)):
+    return ok(request, data=chat_service.get_conversation_payload(user.id, conversation_id))
 
 
 @router.get("/{conversation_id}/messages", response_model=APIResponse)
@@ -45,6 +45,19 @@ async def get_messages(
     return ok(request, data=chat_service.get_messages_payload(user.id, conversation_id, before, limit))
 
 
+@router.get("/{conversation_id}/guidance", response_model=APIResponse)
+async def get_guidance(conversation_id: str, request: Request, user=Depends(get_current_user)):
+    return ok(request, data=chat_service.get_guidance_payload(user.id, conversation_id))
+
+
+@router.post("/{conversation_id}/guidance/draft", response_model=APIResponse)
+async def generate_guidance_draft(conversation_id: str, request: Request, user=Depends(get_current_user)):
+    return ok(
+        request,
+        data=await chat_service.generate_draft_payload(user_id=user.id, conversation_id=conversation_id),
+    )
+
+
 @router.post("/{conversation_id}/messages/stream")
 async def send_message_stream(
     conversation_id: str,
@@ -54,7 +67,7 @@ async def send_message_stream(
     return StreamingResponse(
         chat_service.stream_reply(
             user_id=user.id,
-            session_id=conversation_id,
+            conversation_id=conversation_id,
             content=payload.content,
             client_message_id=payload.client_message_id,
         ),

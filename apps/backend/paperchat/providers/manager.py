@@ -14,7 +14,7 @@ from paperchat.api.errcode import AppError
 from paperchat.settings import ModelEndpointSettings, get_settings
 
 
-ChatSlot = Literal["conversation_model", "tool_call_model", "reasoning_model", "qwen_vl"]
+ChatSlot = Literal["conversation_model", "guidance_model", "tool_call_model", "reasoning_model", "qwen_vl"]
 ENV_PLACEHOLDER_RE = re.compile(r"^\$\{?[A-Z0-9_]+\}?$")
 _MODEL_SLOT_OVERRIDES: ContextVar[dict[str, str]] = ContextVar("paperchat_model_slot_overrides", default={})
 
@@ -77,6 +77,10 @@ def _build_openai_compatible_chat_client(slot: ChatSlot, *, temperature: float =
 
 def get_conversation_chat_model() -> BaseChatModel:
     return _build_openai_compatible_chat_client("conversation_model", temperature=0)
+
+
+def get_guidance_chat_model() -> BaseChatModel:
+    return _build_openai_compatible_chat_client("guidance_model", temperature=0)
 
 
 def get_tool_call_chat_model() -> BaseChatModel:

@@ -46,13 +46,10 @@ async def register(payload: RegisterRequest, request: Request):
         password_hash=hash_password(payload.password),
         display_name=payload.display_name,
     )
-    inbox, session = memory_store.create_default_inbox(user.id)
     return ok(
         request,
         data={
             "user_id": user.id,
-            "inbox_conversation_id": inbox.id,
-            "default_session_id": session.id,
         },
     )
 

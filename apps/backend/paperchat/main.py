@@ -20,17 +20,14 @@ def create_app() -> FastAPI:
         version=settings.server.version,
         description=(
             "PaperChatAgent 后端 API。"
-            "聊天流由 LangChain / LangGraph 产生，FastAPI 通过 SSE 对前端传输。"
+            "当前版本仅保留认证与聊天模块，主聊天与右侧专业提示区通过两条独立链路驱动。"
         ),
         docs_url="/swagger",
         openapi_url="/openapi.json",
         redoc_url="/redoc",
         openapi_tags=[
             {"name": "Auth", "description": "登录、登出、刷新与恢复登录态"},
-            {"name": "Conversations", "description": "默认收件箱会话、消息列表与聊天流"},
-            {"name": "Tasks", "description": "研究任务列表、详情、报告与进度流"},
-            {"name": "Knowledge", "description": "知识库、文件上传与资料挂接"},
-            {"name": "Agents", "description": "预置工作流与节点定义"},
+            {"name": "Conversations", "description": "会话列表、消息流、动态专业提示与研究草案"},
         ],
     )
 

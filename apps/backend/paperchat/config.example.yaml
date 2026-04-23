@@ -47,6 +47,10 @@ multi_models:
     api_key: "your-conversation-api-key"
     base_url: "https://your-openai-compatible-endpoint/v1"
     model_name: "gpt-4o-mini"
+  guidance_model:
+    api_key: "your-guidance-api-key"
+    base_url: "https://your-openai-compatible-endpoint/v1"
+    model_name: "gpt-4o-mini"
   tool_call_model:
     api_key: "${DASHSCOPE_API_KEY}"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"

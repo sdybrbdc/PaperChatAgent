@@ -67,6 +67,7 @@ class ModelEndpointSettings(BaseModel):
 
 class MultiModelsSettings(BaseModel):
     conversation_model: ModelEndpointSettings = Field(default_factory=ModelEndpointSettings)
+    guidance_model: ModelEndpointSettings = Field(default_factory=ModelEndpointSettings)
     tool_call_model: ModelEndpointSettings = Field(default_factory=ModelEndpointSettings)
     reasoning_model: ModelEndpointSettings = Field(default_factory=ModelEndpointSettings)
     text2image: ModelEndpointSettings = Field(default_factory=ModelEndpointSettings)
