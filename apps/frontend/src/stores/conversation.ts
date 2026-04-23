@@ -1,38 +1,51 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { ChatSessionDTO, ChatStreamEventDTO, MessageDTO } from '../types/chat'
-import { createConversation, getConversationMessages, getConversations, sendMessageStream } from '../apis/chat'
+import type { ChatSessionDTO, ChatStreamEventDTO, ConversationGuidanceDTO, MessageDTO } from '../types/chat'
+import {
+  createConversation,
+  generateConversationDraft,
+  getConversationGuidance,
+  getConversationMessages,
+  getConversations,
+  sendMessageStream,
+} from '../apis/chat'
+
+
+function buildDefaultGuidance(): ConversationGuidanceDTO {
+  return {
+    status: 'casual_chat',
+    headline: '你可以先像普通聊天一样交流问题，系统会在对话逐渐收敛后给出更专业的研究提示。',
+    sections: [
+      {
+        key: 'casual_hint',
+        title: '当前判断',
+        style: 'compact',
+        text: '普通交流中，先把问题说清楚即可。',
+        items: [],
+      },
+    ],
+    draft: null,
+    updatedAt: null,
+  }
+}
+
 
 export const useConversationStore = defineStore('conversation', () => {
-  const currentSession = ref<ChatSessionDTO | null>(null)
-  const sessions = ref<ChatSessionDTO[]>([])
+  const isLoading = ref(false)
+  const currentConversation = ref<ChatSessionDTO | null>(null)
+  const conversations = ref<ChatSessionDTO[]>([])
   const messages = ref<MessageDTO[]>([])
-  const streamEvents = ref<string[]>([])
+  const guidance = ref<ConversationGuidanceDTO>(buildDefaultGuidance())
   const composerText = ref('')
   const isStreaming = ref(false)
+  const isGeneratingDraft = ref(false)
   const errorMessage = ref('')
+  const guidanceError = ref('')
 
-  async function load() {
-    sessions.value = await getConversations()
-    if (sessions.value.length === 0) {
-      const created = await createConversation()
-      sessions.value = [created]
-    }
-
-    const selectedSessionId = currentSession.value?.id ?? sessions.value[0]?.id
-    if (selectedSessionId) {
-      await selectConversation(selectedSessionId)
-    }
-  }
-
-  function pushEvent(detail: string) {
-    streamEvents.value = [detail, ...streamEvents.value].slice(0, 8)
-  }
-
-  function markActiveSession(sessionId: string) {
-    sessions.value = sessions.value.map((session) => ({
-      ...session,
-      active: session.id === sessionId,
+  function markActiveConversation(conversationId: string) {
+    conversations.value = conversations.value.map((conversation) => ({
+      ...conversation,
+      active: conversation.id === conversationId,
     }))
   }
 
@@ -49,31 +62,15 @@ export const useConversationStore = defineStore('conversation', () => {
     messages.value = messages.value.filter((message) => !message.isDraft)
   }
 
-  function updateCurrentSessionPreview(message: MessageDTO) {
-    if (!currentSession.value) return
-
-    currentSession.value = {
-      ...currentSession.value,
-      title:
-        currentSession.value.title === '新聊天'
-          ? message.content.replace(/\s+/g, ' ').slice(0, 24) || '新聊天'
-          : currentSession.value.title,
-      lastMessagePreview: message.content.replace(/\s+/g, ' ').slice(0, 120),
-      lastMessageAt: message.createdAt,
-      updatedAt: message.createdAt,
-      active: true,
-    }
-
-    sessions.value = sessions.value.map((session) =>
-      session.id === currentSession.value?.id ? { ...currentSession.value! } : session,
+  function syncConversation(updated: ChatSessionDTO) {
+    currentConversation.value = { ...updated, active: true }
+    conversations.value = conversations.value.map((conversation) =>
+      conversation.id === updated.id ? { ...updated, active: true } : { ...conversation, active: false },
     )
   }
 
   function handleStreamEvent(event: ChatStreamEventDTO) {
     switch (event.event) {
-      case 'message.started':
-        pushEvent('开始生成回复')
-        break
       case 'message.delta': {
         const draft = messages.value.find((message) => message.isDraft)
         const delta = String(event.data.delta ?? '')
@@ -83,46 +80,87 @@ export const useConversationStore = defineStore('conversation', () => {
         }
         break
       }
-      case 'message.progress':
-      case 'message.info':
-      case 'message.tool':
-        pushEvent(String(event.data.detail ?? event.event))
-        break
       case 'message.completed': {
         const message = event.data.message as MessageDTO | undefined
+        const conversation = event.data.conversation as ChatSessionDTO | undefined
         if (message) {
           replaceDraftWith(message)
-          updateCurrentSessionPreview(message)
+        }
+        if (conversation) {
+          syncConversation(conversation)
+        }
+        break
+      }
+      case 'guidance.updated': {
+        const updatedGuidance = event.data.guidance as ConversationGuidanceDTO | undefined
+        const conversation = event.data.conversation as ChatSessionDTO | undefined
+        if (updatedGuidance) {
+          guidance.value = updatedGuidance
+          guidanceError.value = ''
+        }
+        if (conversation) {
+          syncConversation(conversation)
         }
         break
       }
       case 'message.failed':
         removeDraft()
         errorMessage.value = String(event.data.message ?? '流式消息生成失败')
-        pushEvent(errorMessage.value)
         break
-      case 'ping':
+      default:
         break
     }
   }
 
-  async function selectConversation(sessionId: string) {
-    currentSession.value = sessions.value.find((session) => session.id === sessionId) ?? null
-    markActiveSession(sessionId)
-    messages.value = currentSession.value ? await getConversationMessages(currentSession.value.id) : []
-    streamEvents.value = []
+  async function selectConversation(conversationId: string) {
+    currentConversation.value = conversations.value.find((conversation) => conversation.id === conversationId) ?? null
+    markActiveConversation(conversationId)
+    if (!currentConversation.value) {
+      messages.value = []
+      guidance.value = buildDefaultGuidance()
+      return
+    }
+
+    const [loadedMessages, loadedGuidance] = await Promise.all([
+      getConversationMessages(conversationId),
+      getConversationGuidance(conversationId).catch(() => buildDefaultGuidance()),
+    ])
+    messages.value = loadedMessages
+    guidance.value = loadedGuidance
     errorMessage.value = ''
+    guidanceError.value = ''
   }
 
   async function createNewConversation() {
     const created = await createConversation()
-    sessions.value = [{ ...created, active: true }, ...sessions.value.map((session) => ({ ...session, active: false }))]
+    conversations.value = [
+      { ...created, active: true },
+      ...conversations.value.map((conversation) => ({ ...conversation, active: false })),
+    ]
     await selectConversation(created.id)
+  }
+
+  async function load() {
+    if (isLoading.value) return
+    isLoading.value = true
+    try {
+      conversations.value = await getConversations()
+      if (conversations.value.length === 0) {
+        await createNewConversation()
+        return
+      }
+      const selectedConversationId = currentConversation.value?.id ?? conversations.value[0]?.id
+      if (selectedConversationId) {
+        await selectConversation(selectedConversationId)
+      }
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function sendCurrentMessage() {
     const content = composerText.value.trim()
-    if (!content || !currentSession.value || isStreaming.value) return
+    if (!content || !currentConversation.value || isStreaming.value) return
 
     errorMessage.value = ''
     const now = new Date().toISOString()
@@ -133,13 +171,7 @@ export const useConversationStore = defineStore('conversation', () => {
       content,
       createdAt: now,
     })
-    updateCurrentSessionPreview({
-      id: `preview-${Date.now()}`,
-      role: 'user',
-      messageType: 'chat',
-      content,
-      createdAt: now,
-    })
+
     messages.value.push({
       id: `draft-${Date.now()}`,
       role: 'assistant',
@@ -148,6 +180,7 @@ export const useConversationStore = defineStore('conversation', () => {
       createdAt: now,
       isDraft: true,
     })
+
     composerText.value = ''
     isStreaming.value = true
 
@@ -155,7 +188,7 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       await sendMessageStream(
         {
-          conversationId: currentSession.value.id,
+          conversationId: currentConversation.value.id,
           content,
           clientMessageId: `client-${Date.now()}`,
         },
@@ -171,17 +204,34 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
+  async function generateDraft() {
+    if (!currentConversation.value || isGeneratingDraft.value) return
+    isGeneratingDraft.value = true
+    guidanceError.value = ''
+    try {
+      guidance.value = await generateConversationDraft(currentConversation.value.id)
+    } catch (error) {
+      guidanceError.value = error instanceof Error ? error.message : '研究草案生成失败'
+    } finally {
+      isGeneratingDraft.value = false
+    }
+  }
+
   return {
-    currentSession,
-    sessions,
+    currentConversation,
+    conversations,
     messages,
-    streamEvents,
+    guidance,
     composerText,
     isStreaming,
+    isGeneratingDraft,
     errorMessage,
+    guidanceError,
+    isLoading,
     load,
     selectConversation,
     createNewConversation,
     sendCurrentMessage,
+    generateDraft,
   }
 })

@@ -1,26 +1,23 @@
-export interface InboxConversationDTO {
-  id: string
-  title: string
-  status: 'active' | 'archived'
-  summary: string
-  lastMessageAt?: string | null
-}
+export type GuidanceStatus =
+  | 'casual_chat'
+  | 'topic_exploration'
+  | 'needs_more_info'
+  | 'ready_for_draft'
+  | 'draft_ready'
+
+export type GuidanceSectionStyle = 'info' | 'compact' | 'list' | 'warning' | 'draft_entry'
 
 export interface ChatSessionDTO {
   id: string
   title: string
-  scope: 'inbox' | 'workspace'
-  status?: 'active' | 'archived'
-  lastMessageAt?: string | null
-  updatedAt?: string | null
-  lastMessagePreview?: string
+  status: 'active' | 'archived'
   active?: boolean
 }
 
 export interface MessageDTO {
   id: string
   role: 'user' | 'assistant' | 'system'
-  messageType: 'chat' | 'task_suggestion' | 'system_notice'
+  messageType: 'chat'
   content: string
   metadata?: Record<string, unknown>
   citations?: Array<Record<string, unknown>>
@@ -28,13 +25,30 @@ export interface MessageDTO {
   isDraft?: boolean
 }
 
-export interface TaskSuggestionDTO {
+export interface ResearchDraftDTO {
   title: string
   topic: string
-  sources: string
-  outputs: string
-  nextStep: string
-  statusLabel: string
+  objective: string
+  scope: string
+  suggestedMaterials: string[]
+  suggestedAgents: string[]
+  nextActions: string[]
+}
+
+export interface ConversationGuidanceSectionDTO {
+  key: string
+  title: string
+  style: GuidanceSectionStyle
+  text?: string
+  items?: string[]
+}
+
+export interface ConversationGuidanceDTO {
+  status: GuidanceStatus
+  headline: string
+  sections: ConversationGuidanceSectionDTO[]
+  draft: ResearchDraftDTO | null
+  updatedAt?: string | null
 }
 
 export interface ChatStreamEventDTO {
@@ -46,6 +60,7 @@ export interface ChatStreamEventDTO {
     | 'message.info'
     | 'message.completed'
     | 'message.failed'
+    | 'guidance.updated'
     | 'ping'
   data: Record<string, unknown>
 }

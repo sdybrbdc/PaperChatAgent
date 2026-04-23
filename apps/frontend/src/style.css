@@ -378,7 +378,7 @@ button {
 .recent-chat-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--pc-text-primary);
+  color: var(--pc-text);
 }
 
 .recent-chat-preview {
@@ -412,39 +412,43 @@ button {
   min-width: 0;
   height: 100vh;
   padding: 24px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .page-shell {
-  min-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
   padding: 24px 28px 28px;
   border-radius: 28px;
   border: 1px solid var(--pc-border);
   background: var(--pc-surface);
   box-shadow: var(--pc-shadow);
+  overflow: hidden;
 }
 
 .chat-page-shell {
-  height: calc(100vh - 48px);
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.page-header {
+.page-header,
+.chat-header-fixed {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 28px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
 }
 
-.page-header h2 {
+.page-header h2,
+.chat-header-fixed h2 {
   margin: 0;
   font-size: 28px;
 }
 
-.page-header p {
+.page-header p,
+.chat-header-fixed p {
   max-width: 640px;
   margin: 8px 0 0;
   color: var(--pc-text-muted);
@@ -467,28 +471,42 @@ button {
   min-height: 0;
 }
 
+.chat-content-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(280px, 3fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+  gap: 20px;
+}
+
 .chat-surface,
 .knowledge-surface,
 .agents-surface,
-.tasks-surface {
+.tasks-surface,
+.chat-main-scroll,
+.guidance-panel {
   background: var(--pc-surface-soft);
   border: 1px solid var(--pc-border);
   border-radius: 22px;
   padding: 20px;
 }
 
+.chat-main-scroll {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .chat-surface--conversation {
-  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 .message-viewport {
-  flex: 1;
-  min-height: 0;
+  height: 100%;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 8px;
 }
 
 .message-list {
@@ -569,7 +587,7 @@ button {
 .message-content blockquote {
   margin: 14px 0;
   padding-left: 14px;
-  border-left: 3px solid var(--pc-border-strong);
+  border-left: 3px solid var(--pc-border);
   color: var(--pc-text-secondary);
 }
 
@@ -619,15 +637,21 @@ button {
   font-weight: 600;
 }
 
-.composer {
+.composer,
+.chat-composer-bar {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-top: 18px;
   padding: 14px;
   border-radius: 18px;
   background: var(--pc-surface);
   border: 1px solid var(--pc-border);
+}
+
+.chat-composer-bar {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  margin-top: 0;
 }
 
 .composer-fixed {
@@ -668,6 +692,102 @@ button {
 .rail-card ul {
   margin: 0;
   padding-left: 18px;
+}
+
+.guidance-panel {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.guidance-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.guidance-panel-headline {
+  margin-bottom: 18px;
+  color: var(--pc-text-secondary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.guidance-section {
+  padding: 0 0 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--pc-border);
+}
+
+.guidance-section:last-child {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.guidance-section h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.guidance-section p,
+.guidance-section li,
+.guidance-section span,
+.guidance-section strong {
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.guidance-section ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--pc-text-secondary);
+}
+
+.guidance-section--warning h3 {
+  color: var(--pc-warning-text);
+}
+
+.guidance-section--draft {
+  background: rgba(37, 99, 235, 0.04);
+  border: 1px solid var(--pc-border);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.guidance-kv {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.guidance-kv-block {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.guidance-kv strong,
+.guidance-kv-block strong {
+  color: var(--pc-text);
+}
+
+.guidance-error {
+  color: var(--pc-danger-text);
+  margin: 0 0 12px;
+}
+
+.guidance-panel-footer {
+  flex-shrink: 0;
+  padding-top: 16px;
+}
+
+.guidance-draft-button {
+  width: 100%;
 }
 
 .toolbar-search {

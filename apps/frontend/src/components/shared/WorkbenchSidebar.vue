@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ArrowDown, ArrowRight, Plus } from '@element-plus/icons-vue'
 import AppLogoBlock from './AppLogoBlock.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -13,22 +13,17 @@ const conversationStore = useConversationStore()
 const uiStore = useUiStore()
 
 const navItems = [
-  { key: 'chat', label: '聊天', to: '/chat' },
-  { key: 'knowledge', label: '知识库', to: '/knowledge' },
-  { key: 'mcp', label: 'MCP 服务', tag: '预留', disabled: true },
-  { key: 'skills', label: 'Skills', tag: '预留', disabled: true },
-  { key: 'agents', label: '智能体', to: '/agents' },
-  { key: 'tasks', label: '后台任务', to: '/tasks' },
-  { key: 'dashboard', label: '数据看板', tag: '预留', disabled: true },
+  { key: 'chat', label: '聊天', to: '/chat', disabled: false },
+  { key: 'knowledge', label: '知识库', disabled: true },
+  { key: 'mcp', label: 'MCP 服务', disabled: true },
+  { key: 'skills', label: 'Skills', disabled: true },
+  { key: 'agents', label: '智能体', disabled: true },
+  { key: 'models', label: '模型', disabled: true },
+  { key: 'tasks', label: '后台任务', disabled: true },
+  { key: 'dashboard', label: '数据看板', disabled: true },
 ]
 
 const currentUserName = computed(() => authStore.currentUser?.displayName ?? 'sdybdc')
-
-onMounted(() => {
-  if (conversationStore.sessions.length === 0) {
-    conversationStore.load()
-  }
-})
 
 async function handleCreateConversation() {
   await conversationStore.createNewConversation()
@@ -60,18 +55,16 @@ async function handleLogout() {
       </button>
       <nav v-show="!uiStore.featureCollapsed" class="nav-list">
         <template v-for="item in navItems" :key="item.key">
-          <RouterLink
+          <router-link
             v-if="!item.disabled"
             :to="item.to!"
             class="nav-item"
             :class="{ active: uiStore.currentNav === item.key }"
           >
             <span>{{ item.label }}</span>
-            <span v-if="item.tag" class="nav-item-tag">{{ item.tag }}</span>
-          </RouterLink>
+          </router-link>
           <div v-else class="nav-item disabled">
             <span>{{ item.label }}</span>
-            <span v-if="item.tag" class="nav-item-tag">{{ item.tag }}</span>
           </div>
         </template>
       </nav>
@@ -93,7 +86,7 @@ async function handleLogout() {
         <div v-show="!uiStore.historyCollapsed" class="sidebar-scroll">
           <div class="history-group recent-chat-list">
             <button
-              v-for="session in conversationStore.sessions"
+              v-for="session in conversationStore.conversations"
               :key="session.id"
               type="button"
               class="recent-chat-item"
@@ -101,8 +94,6 @@ async function handleLogout() {
               @click="conversationStore.selectConversation(session.id)"
             >
               <div class="recent-chat-title">{{ session.title }}</div>
-              <div v-if="session.lastMessagePreview" class="recent-chat-preview">{{ session.lastMessagePreview }}</div>
-              <div v-if="session.updatedAt" class="recent-chat-time">{{ session.updatedAt }}</div>
             </button>
           </div>
         </div>
