@@ -117,6 +117,8 @@ class PaperChatResearchTaskRecord(Base):
     current_node: Mapped[str | None] = mapped_column(String(64), nullable=True)
     progress_percent: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    checkpoint_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 

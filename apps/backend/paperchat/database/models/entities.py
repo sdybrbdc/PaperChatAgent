@@ -92,5 +92,7 @@ class ResearchTask:
     current_node: str | None = None
     progress_percent: float = 0.0
     detail: str = ""
+    payload_json: dict = field(default_factory=dict)
+    checkpoint_json: dict = field(default_factory=dict)
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)

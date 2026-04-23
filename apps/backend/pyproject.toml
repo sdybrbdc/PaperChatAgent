@@ -14,7 +14,6 @@ dependencies = [
   "PyYAML>=6.0,<7.0",
   "SQLAlchemy>=2.0,<3.0",
   "pymysql>=1.1,<2.0",
-  "redis>=5.2,<6.0",
   "minio>=7.2,<8.0",
   "httpx>=0.28,<1.0",
   "langchain-core>=0.3,<0.4",

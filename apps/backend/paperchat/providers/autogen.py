@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from functools import lru_cache
-
 from autogen_core.models import ModelInfo
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
@@ -19,7 +17,6 @@ def _infer_model_family(model_name: str) -> str:
     return "openai"
 
 
-@lru_cache(maxsize=16)
 def get_autogen_model_client(
     slot: ChatSlot,
     *,

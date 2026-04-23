@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Literal
 import re
@@ -14,6 +16,7 @@ from paperchat.settings import ModelEndpointSettings, get_settings
 
 ChatSlot = Literal["conversation_model", "tool_call_model", "reasoning_model", "qwen_vl"]
 ENV_PLACEHOLDER_RE = re.compile(r"^\$\{?[A-Z0-9_]+\}?$")
+_MODEL_SLOT_OVERRIDES: ContextVar[dict[str, str]] = ContextVar("paperchat_model_slot_overrides", default={})
 
 
 def _is_missing_value(value: str) -> bool:
@@ -37,10 +40,29 @@ def _require_endpoint(slot: str, config: ModelEndpointSettings) -> ModelEndpoint
     return config
 
 
+def get_model_slot_overrides() -> dict[str, str]:
+    return dict(_MODEL_SLOT_OVERRIDES.get())
+
+
+@contextmanager
+def temporary_model_slot_overrides(overrides: dict[str, str] | None):
+    if not overrides:
+        yield
+        return
+    merged = get_model_slot_overrides()
+    merged.update(overrides)
+    token = _MODEL_SLOT_OVERRIDES.set(merged)
+    try:
+        yield
+    finally:
+        _MODEL_SLOT_OVERRIDES.reset(token)
+
+
 def _get_chat_slot_config(slot: ChatSlot) -> ModelEndpointSettings:
     settings = get_settings()
-    config = getattr(settings.multi_models, slot)
-    return _require_endpoint(slot, config)
+    effective_slot = get_model_slot_overrides().get(slot, slot)
+    config = getattr(settings.multi_models, effective_slot)
+    return _require_endpoint(effective_slot, config)
 
 
 def _build_openai_compatible_chat_client(slot: ChatSlot, *, temperature: float = 0) -> BaseChatModel:

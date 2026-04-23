@@ -18,9 +18,6 @@ mysql:
   endpoint: "mysql+pymysql://user:password@127.0.0.1:3306/paperchatagent"
   async_endpoint: "mysql+aiomysql://user:password@127.0.0.1:3306/paperchatagent"
 
-redis:
-  endpoint: "redis://localhost:6379"
-
 vector_db:
   host: "127.0.0.1"
   port: "19530"

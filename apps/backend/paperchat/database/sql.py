@@ -82,7 +82,8 @@ def init_database() -> None:
 
 def ensure_runtime_columns() -> None:
     inspector = inspect(engine)
-    if "paperchat_chat_sessions" not in inspector.get_table_names():
+    table_names = inspector.get_table_names()
+    if "paperchat_chat_sessions" not in table_names:
         return
 
     existing_columns = {column["name"] for column in inspector.get_columns("paperchat_chat_sessions")}
@@ -98,6 +99,19 @@ def ensure_runtime_columns() -> None:
             "ALTER TABLE `paperchat_chat_sessions` "
             "ADD COLUMN `last_summarized_message_id` VARCHAR(36) NULL"
         )
+
+    if "paperchat_research_tasks" in table_names:
+        task_columns = {column["name"] for column in inspector.get_columns("paperchat_research_tasks")}
+        if "payload_json" not in task_columns:
+            alter_statements.append(
+                "ALTER TABLE `paperchat_research_tasks` "
+                "ADD COLUMN `payload_json` JSON NULL"
+            )
+        if "checkpoint_json" not in task_columns:
+            alter_statements.append(
+                "ALTER TABLE `paperchat_research_tasks` "
+                "ADD COLUMN `checkpoint_json` JSON NULL"
+            )
 
     if not alter_statements:
         return

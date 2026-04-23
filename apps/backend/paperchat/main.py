@@ -29,7 +29,6 @@ def create_app() -> FastAPI:
             {"name": "Auth", "description": "登录、登出、刷新与恢复登录态"},
             {"name": "Conversations", "description": "默认收件箱会话、消息列表与聊天流"},
             {"name": "Tasks", "description": "研究任务列表、详情、报告与进度流"},
-            {"name": "Workspaces", "description": "研究工作区与分享链接"},
             {"name": "Knowledge", "description": "知识库、文件上传与资料挂接"},
             {"name": "Agents", "description": "预置工作流与节点定义"},
         ],

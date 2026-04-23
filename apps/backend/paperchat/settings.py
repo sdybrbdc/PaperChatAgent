@@ -31,10 +31,6 @@ class MySQLSettings(BaseModel):
     async_endpoint: str = ""
 
 
-class RedisSettings(BaseModel):
-    endpoint: str = "redis://localhost:6379"
-
-
 class VectorDBSettings(BaseModel):
     host: str = "127.0.0.1"
     port: str = "19530"
@@ -83,7 +79,6 @@ class AppSettings(BaseModel):
     server: ServerSettings = Field(default_factory=ServerSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     mysql: MySQLSettings = Field(default_factory=MySQLSettings)
-    redis: RedisSettings = Field(default_factory=RedisSettings)
     vector_db: VectorDBSettings = Field(default_factory=VectorDBSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     multi_models: MultiModelsSettings = Field(default_factory=MultiModelsSettings)

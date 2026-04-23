@@ -93,7 +93,7 @@ def get_workflow_definition(workflow_id: str) -> dict | None:
         "name": DEFAULT_WORKFLOW_NAME,
         "description": DEFAULT_WORKFLOW_DESCRIPTION,
         "node_count": len(DEFAULT_WORKFLOW_NODES),
-        "agent_runtime": "langgraph",
+        "agent_runtime": "in_process_asyncio",
         "node_ids": [node.id for node in DEFAULT_WORKFLOW_NODES],
     }
 

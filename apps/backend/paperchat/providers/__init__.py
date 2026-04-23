@@ -4,11 +4,13 @@ from .manager import (
     Text2ImageClient,
     get_conversation_chat_model,
     get_embedding_client,
+    get_model_slot_overrides,
     get_reasoning_chat_model,
     get_rerank_client,
     get_text2image_client,
     get_tool_call_chat_model,
     get_vision_chat_model,
+    temporary_model_slot_overrides,
 )
 from .autogen import (
     get_autogen_conversation_model_client,
@@ -29,9 +31,11 @@ __all__ = [
     "get_autogen_vision_model_client",
     "get_conversation_chat_model",
     "get_embedding_client",
+    "get_model_slot_overrides",
     "get_reasoning_chat_model",
     "get_rerank_client",
     "get_text2image_client",
     "get_tool_call_chat_model",
     "get_vision_chat_model",
+    "temporary_model_slot_overrides",
 ]

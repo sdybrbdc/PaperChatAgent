@@ -129,6 +129,8 @@ CREATE TABLE IF NOT EXISTS `paperchat_research_tasks` (
   `current_node` VARCHAR(64) DEFAULT NULL,
   `progress_percent` FLOAT NOT NULL DEFAULT 0,
   `detail` TEXT NOT NULL,
+  `payload_json` JSON DEFAULT NULL,
+  `checkpoint_json` JSON DEFAULT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

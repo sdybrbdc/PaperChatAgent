@@ -270,14 +270,28 @@ class SQLBackedStore:
             record.revoked_at = utcnow()
             record.updated_at = utcnow()
 
-    def create_task(self, *, user_id: str, workspace_id: str, title: str):
+    def create_task(
+        self,
+        *,
+        user_id: str,
+        workspace_id: str,
+        title: str,
+        payload_json: dict | None = None,
+        checkpoint_json: dict | None = None,
+    ):
         with db_session() as session:
-            task = PaperChatResearchTaskRecord(user_id=user_id, workspace_id=workspace_id, title=title)
+            task = PaperChatResearchTaskRecord(
+                user_id=user_id,
+                workspace_id=workspace_id,
+                title=title,
+                payload_json=payload_json or {},
+                checkpoint_json=checkpoint_json or {},
+            )
             session.add(task)
             session.flush()
             self.task_events.setdefault(task.id, [])
             self.task_subscribers.setdefault(task.id, set())
-            self.task_node_runs.setdefault(task.id, {})
+            self.task_node_runs[task.id] = dict((task.checkpoint_json or {}).get("node_runs", {}))
             return task
 
     def update_task(self, task_id: str, **changes):
@@ -295,6 +309,29 @@ class SQLBackedStore:
         with db_session() as session:
             return session.get(PaperChatResearchTaskRecord, task_id)
 
+    def get_task_checkpoint(self, task_id: str) -> dict:
+        task = self.get_task(task_id)
+        if task is None:
+            return {}
+        checkpoint = task.checkpoint_json or {}
+        return dict(checkpoint)
+
+    def update_task_checkpoint(self, task_id: str, **changes) -> dict | None:
+        with db_session() as session:
+            task = session.get(PaperChatResearchTaskRecord, task_id)
+            if task is None:
+                return None
+            checkpoint = dict(task.checkpoint_json or {})
+            checkpoint.update(changes)
+            task.checkpoint_json = checkpoint
+            task.updated_at = utcnow()
+            session.flush()
+            if "node_runs" in checkpoint:
+                self.task_node_runs[task_id] = {
+                    node_id: dict(node_payload) for node_id, node_payload in checkpoint["node_runs"].items()
+                }
+            return checkpoint
+
     def list_tasks(self, user_id: str):
         with db_session() as session:
             return list(
@@ -305,20 +342,56 @@ class SQLBackedStore:
                 )
             )
 
-    def init_task_workflow(self, *, task_id: str, workflow_id: str, nodes: Sequence) -> None:
+    def _ensure_task_runtime_loaded(self, task_id: str) -> None:
+        if task_id in self.task_node_runs and self.task_node_runs[task_id]:
+            return
+        checkpoint = self.get_task_checkpoint(task_id)
+        node_runs = checkpoint.get("node_runs", {})
+        self.task_node_runs[task_id] = {
+            node_id: dict(node_payload) for node_id, node_payload in node_runs.items()
+        }
+
+    def init_task_workflow(
+        self,
+        *,
+        task_id: str,
+        workflow_id: str,
+        nodes: Sequence,
+        workflow_state: dict | None = None,
+        recovery_policy: dict | None = None,
+    ) -> None:
         self.task_node_runs[task_id] = {
             node.id: {
                 **node.as_payload(status="queued", detail="等待执行"),
                 "workflow_id": workflow_id,
+                "attempt_count": 0,
+                "last_error_code": "",
+                "last_error_message": "",
+                "input_snapshot_json": {},
+                "output_snapshot_json": {},
+                "checkpoint_json": {},
+                "active_model_overrides": {},
             }
             for node in nodes
         }
+        self.update_task_checkpoint(
+            task_id,
+            workflow_id=workflow_id,
+            workflow_state=workflow_state or {},
+            node_runs=self.task_node_runs[task_id],
+            resume_from_node=None,
+            failure_context={},
+            recovery_policy=recovery_policy or {},
+            active_model_overrides={},
+        )
 
     def list_task_node_runs(self, task_id: str) -> list[dict]:
+        self._ensure_task_runtime_loaded(task_id)
         node_runs = list(self.task_node_runs.get(task_id, {}).values())
         return sorted(node_runs, key=lambda item: item.get("order", 0))
 
     def update_task_node_run(self, task_id: str, node_id: str, **changes) -> dict | None:
+        self._ensure_task_runtime_loaded(task_id)
         node_runs = self.task_node_runs.setdefault(task_id, {})
         node = node_runs.get(node_id)
         if node is None:
@@ -329,9 +402,62 @@ class SQLBackedStore:
         status = str(node.get("status", ""))
         if status == "running" and not node.get("started_at"):
             node["started_at"] = now
-        if status in {"completed", "failed", "canceled"}:
+        if status in {"completed", "failed", "canceled", "paused"}:
             node["completed_at"] = now
+        self.update_task_checkpoint(task_id, node_runs=node_runs)
         return node
+
+    def update_task_workflow_state(self, task_id: str, workflow_state: dict) -> dict | None:
+        return self.update_task_checkpoint(task_id, workflow_state=workflow_state, resume_from_node=None, failure_context={})
+
+    def record_task_failure_context(
+        self,
+        task_id: str,
+        *,
+        resume_from_node: str,
+        failure_context: dict,
+        active_model_overrides: dict | None = None,
+    ) -> dict | None:
+        return self.update_task_checkpoint(
+            task_id,
+            resume_from_node=resume_from_node,
+            failure_context=failure_context,
+            active_model_overrides=active_model_overrides or {},
+        )
+
+    def prepare_task_resume(
+        self,
+        task_id: str,
+        *,
+        resume_from_node: str,
+        model_slot_overrides: dict[str, str] | None = None,
+    ) -> dict | None:
+        self._ensure_task_runtime_loaded(task_id)
+        node_runs = self.task_node_runs.setdefault(task_id, {})
+        current = node_runs.get(resume_from_node)
+        if current is None:
+            return None
+
+        resume_order = int(current.get("order", 0))
+        for node in node_runs.values():
+            if int(node.get("order", 0)) < resume_order:
+                continue
+            node["status"] = "pending"
+            node["detail"] = "等待继续执行"
+            node["started_at"] = None
+            node["completed_at"] = None
+            node["last_error_code"] = ""
+            node["last_error_message"] = ""
+            node["output_snapshot_json"] = {}
+            node["checkpoint_json"] = {}
+            node["active_model_overrides"] = model_slot_overrides or {}
+        return self.update_task_checkpoint(
+            task_id,
+            node_runs=node_runs,
+            resume_from_node=resume_from_node,
+            failure_context={},
+            active_model_overrides=model_slot_overrides or {},
+        )
 
     def save_task_report(
         self,
@@ -414,6 +540,7 @@ class SQLBackedStore:
         task = self.get_task(task_id)
         if not task:
             return None
+        checkpoint = self.get_task_checkpoint(task_id)
         return {
             "task_id": task.id,
             "status": task.status,
@@ -422,6 +549,8 @@ class SQLBackedStore:
             "detail": task.detail,
             "occurred_at": utcnow().isoformat(),
             "nodes": self.list_task_node_runs(task_id),
+            "resume_from_node": checkpoint.get("resume_from_node"),
+            "failure_context": checkpoint.get("failure_context", {}),
         }
 
     def as_user_payload(self, user) -> dict:
@@ -469,6 +598,7 @@ class SQLBackedStore:
         }
 
     def as_task_payload(self, task) -> dict:
+        checkpoint = dict(task.checkpoint_json or {})
         return {
             "id": task.id,
             "title": task.title,
@@ -476,6 +606,8 @@ class SQLBackedStore:
             "current_node": task.current_node,
             "progress_percent": task.progress_percent,
             "detail": task.detail,
+            "resume_from_node": checkpoint.get("resume_from_node"),
+            "failure_context": checkpoint.get("failure_context", {}),
             "created_at": task.created_at.isoformat(),
             "updated_at": task.updated_at.isoformat(),
         }

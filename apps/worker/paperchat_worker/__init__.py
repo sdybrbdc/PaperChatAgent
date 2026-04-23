@@ -1,1 +1,0 @@
-"""PaperChatAgent worker package."""
