@@ -1,20 +1,14 @@
-# PaperChatAgent API Contract v1
+# PaperChatAgent API Contract V1
 
 ## 1. 文档目标
 
-本文档用于冻结 PaperChatAgent V1 的首批后端 API 契约，重点覆盖：
+本文档用于冻结 PaperChatAgent V1 的 API 契约口径，使前后端围绕“聊天主链路 + 模块化能力”开发。
 
-- 通用响应格式
-- 认证与登录态恢复
-- 默认聊天页与消息流
-- 后台任务进度流
-- 分页与错误码约定
+说明：
 
-默认原则：
-
-- 浏览器主链路采用 `Cookie 优先`
-- 聊天流由 `LangChain / LangGraph` 负责产生，`FastAPI` 负责通过 `SSE` 传输
-- 聊天接口对前端暴露业务事件，而不是直接暴露 LangGraph `StreamPart`
+- 本文档定义的是目标契约
+- 当前仓库并非所有接口都已完全实现
+- 对于仍在使用的旧接口，会在兼容章节中特别说明
 
 ## 2. 通用约定
 
@@ -23,8 +17,6 @@
 - 本地开发前缀：`/api/v1`
 
 ### 2.2 成功响应
-
-成功响应统一结构：
 
 ```json
 {
@@ -35,16 +27,7 @@
 }
 ```
 
-说明：
-
-- `code`：稳定业务码，成功固定为 `OK`
-- `message`：人类可读描述
-- `data`：业务数据载荷
-- `request_id`：由后端中间件生成并回传
-
 ### 2.3 失败响应
-
-失败响应统一结构：
 
 ```json
 {
@@ -55,574 +38,426 @@
 }
 ```
 
-说明：
+### 2.4 通用原则
 
-- HTTP 状态码表达传输层结果
-- `code` 表达稳定业务错误语义
-- `details` 仅在需要补充字段级信息时返回
-
-### 2.4 时间、ID 与枚举
-
-- 时间：统一使用 `ISO 8601 UTC`
-- ID：统一使用 UUID 字符串
-- 枚举：统一采用小写下划线，如 `task_suggestion`
+- 时间统一使用 `ISO 8601 UTC`
+- ID 统一使用 UUID 字符串
+- SSE 统一传递业务事件，而不是底层框架原始流对象
+- 外部 API 不把 `ResearchWorkspace` 作为主对象暴露给前端
 
 ## 3. Auth
 
-### 3.1 认证策略
-
-- 浏览器主链路采用 `HttpOnly Cookie`
-- 后端同时兼容 `Authorization: Bearer <token>`
-- 前端正式链路默认不把 access token 持久化到 `localStorage`
-- 前端普通请求统一开启 `withCredentials: true`
-- 前端 SSE 请求统一开启 `credentials: "include"`
-
-默认参数：
-
-- access token：1 天
-- refresh token：30 天
-- `SameSite=Lax`
-- 生产环境 `Secure=true`
-
-### 3.2 `POST /auth/register`
-
-请求体：
-
-```json
-{
-  "email": "user@example.com",
-  "password": "plain-password",
-  "display_name": "alice"
-}
-```
-
-成功响应：
-
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "user_id": "uuid",
-    "inbox_conversation_id": "uuid",
-    "default_session_id": "uuid"
-  },
-  "request_id": "trace-id"
-}
-```
-
-后端行为：
-
-1. 校验邮箱唯一性
-2. hash 密码
-3. 创建 `users`
-4. 创建 `inbox_conversations`
-5. 创建一个默认 `chat_sessions(session_scope=inbox)`
-
-### 3.3 `POST /auth/login`
-
-请求体：
-
-```json
-{
-  "email": "user@example.com",
-  "password": "plain-password"
-}
-```
-
-成功响应：
-
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "user": {
-      "id": "uuid",
-      "email": "user@example.com",
-      "display_name": "alice",
-      "avatar_url": ""
-    }
-  },
-  "request_id": "trace-id"
-}
-```
-
-响应副作用：
-
-- 写入 access / refresh `HttpOnly Cookie`
-- 创建一条 `user_sessions`
-
-### 3.4 `POST /auth/refresh`
+### 3.1 `POST /auth/register`
 
 用途：
 
-- 使用 refresh cookie 续期 access / refresh cookies
+- 注册用户
 
-成功响应：
+核心返回：
 
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "refreshed": true
-  },
-  "request_id": "trace-id"
-}
-```
+- `user_id`
+- `default_session_id`
 
-### 3.5 `POST /auth/logout`
+### 3.2 `POST /auth/login`
 
 用途：
 
-- 清理浏览器 cookies
-- 吊销当前 `user_sessions`
+- 登录并写入 Cookie
 
-成功响应：
+核心返回：
 
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "logged_out": true
-  },
-  "request_id": "trace-id"
-}
-```
+- `user`
 
-### 3.6 `GET /me`
+### 3.3 `POST /auth/refresh`
 
 用途：
 
-- 前端启动时恢复登录态
-- 路由守卫判断当前浏览器会话是否仍有效
+- 刷新登录态
 
-成功响应：
+### 3.4 `POST /auth/logout`
 
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "display_name": "alice",
-    "avatar_url": ""
-  },
-  "request_id": "trace-id"
-}
-```
+用途：
+
+- 清理 Cookie 并吊销当前登录会话
+
+### 3.5 `GET /me`
+
+用途：
+
+- 恢复浏览器登录态
 
 ## 4. Chat
+
+聊天是 V1 主链路，因此会话与消息接口是首要资源接口。
 
 ### 4.1 `GET /conversations`
 
 用途：
 
-- 返回当前用户最近会话列表
+- 返回最近会话列表
 
-成功响应：
+返回对象：
 
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "title": "新聊天",
-        "scope": "inbox",
-        "status": "active",
-        "last_message_at": "2026-04-22T10:00:00Z",
-        "updated_at": "2026-04-22T10:00:00Z",
-        "last_message_preview": "最近一条消息摘要"
-      }
-    ]
-  },
-  "request_id": "trace-id"
-}
-```
+- `ChatSessionDTO[]`
+
+`ChatSessionDTO` 至少包含：
+
+- `id`
+- `title`
+- `status`
+- `last_message_at`
+- `updated_at`
+- `last_message_preview`
 
 ### 4.2 `POST /conversations`
 
 用途：
 
-- 创建一个新的聊天会话
+- 创建新会话
 
-成功响应：
-
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "id": "uuid",
-    "title": "新聊天",
-    "scope": "inbox",
-    "status": "active",
-    "last_message_at": null,
-    "updated_at": "2026-04-22T10:00:00Z",
-    "last_message_preview": ""
-  },
-  "request_id": "trace-id"
-}
-```
-
-### 4.3 `GET /conversations/inbox`
+### 4.3 `GET /conversations/{id}/messages`
 
 用途：
 
-- 返回当前用户的默认容器与首个会话
-- 仅作为兼容接口保留，聊天前端不再主依赖
+- 获取会话消息历史
 
-成功响应：
+返回对象：
 
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "conversation": {
-      "id": "uuid",
-      "title": "默认收件箱会话",
-      "status": "active",
-      "summary": "",
-      "last_message_at": "2026-04-22T10:00:00Z"
-    },
-    "current_session": {
-      "id": "uuid",
-      "title": "默认研究讨论",
-      "scope": "inbox",
-      "status": "active",
-      "last_message_at": "2026-04-22T10:00:00Z"
-    }
-  },
-  "request_id": "trace-id"
-}
-```
+- `MessageDTO[]`
 
-### 4.4 `GET /conversations/{id}/messages`
+`MessageDTO` 至少包含：
+
+- `id`
+- `role`
+- `message_type`
+- `content`
+- `metadata`
+- `citations`
+- `created_at`
+
+### 4.4 `POST /conversations/{id}/messages/stream`
 
 用途：
 
-- 返回会话消息历史
-
-查询参数：
-
-- `before`: 可选，消息游标
-- `limit`: 可选，默认 `50`，最大 `100`
-
-成功响应：
-
-```json
-{
-  "code": "OK",
-  "message": "success",
-  "data": {
-    "items": [
-      {
-        "id": "uuid",
-        "role": "assistant",
-        "message_type": "chat",
-        "content": "你好，我们先收束一下研究目标。",
-        "metadata": {},
-        "citations": [],
-        "created_at": "2026-04-22T10:00:00Z"
-      }
-    ],
-    "paging": {
-      "before": "uuid",
-      "limit": 50,
-      "has_more": false
-    }
-  },
-  "request_id": "trace-id"
-}
-```
-
-### 4.5 `POST /conversations/{id}/messages/stream`
-
-用途：
-
-- 单请求完成：
-  - 用户消息落库
-  - LangGraph 聊天图执行
-  - SSE 事件回传
-  - assistant 最终消息落库
+- 发送消息并建立 SSE 响应流
 
 请求体：
 
 ```json
 {
-  "content": "请帮我梳理论文问答工作台的研究方向",
+  "content": "请帮我梳理这个研究方向",
   "client_message_id": "client-uuid",
   "attachment_ids": ["knowledge-file-id-1"],
   "metadata": {}
 }
 ```
 
-后端内部链路：
-
-1. `load_context`
-2. `maybe_retrieve_context`
-3. `call_model`
-
-内部流来源：
-
-- `graph.astream(..., stream_mode=["messages", "updates", "custom"], version="v2")`
-
-对前端暴露的 SSE 业务事件：
-
-#### `message.started`
-
-```json
-{
-  "event": "message.started",
-  "data": {
-    "conversation_id": "uuid",
-    "session_id": "uuid",
-    "client_message_id": "client-uuid"
-  }
-}
-```
-
-#### `message.delta`
-
-```json
-{
-  "event": "message.delta",
-  "data": {
-    "delta": "这是新生成的一段文本",
-    "accumulated": "这是当前累计内容"
-  }
-}
-```
-
-#### `message.progress`
-
-```json
-{
-  "event": "message.progress",
-  "data": {
-    "stage": "context",
-    "node": "maybe_retrieve_context",
-    "status": "completed",
-    "detail": "当前无额外上下文检索"
-  }
-}
-```
-
-#### `message.tool`
-
-```json
-{
-  "event": "message.tool",
-  "data": {
-    "status": "started",
-    "tool": "context_loader",
-    "detail": "正在整理当前会话上下文"
-  }
-}
-```
-
-`status` 允许值：
-
-- `started`
-- `completed`
-- `failed`
-
-#### `message.info`
-
-```json
-{
-  "event": "message.info",
-  "data": {
-    "detail": "已加载 5 条相关资料"
-  }
-}
-```
-
-#### `message.completed`
-
-```json
-{
-  "event": "message.completed",
-  "data": {
-    "message": {
-      "id": "uuid",
-      "role": "assistant",
-      "message_type": "chat",
-      "content": "最终完整回复",
-      "metadata": {},
-      "citations": [],
-      "created_at": "2026-04-22T10:00:10Z"
-    }
-  }
-}
-```
-
-#### `message.failed`
-
-```json
-{
-  "event": "message.failed",
-  "data": {
-    "code": "CHAT_STREAM_FAILED",
-    "message": "模型生成失败"
-  }
-}
-```
-
-#### `ping`
-
-```json
-{
-  "event": "ping",
-  "data": {
-    "ts": "2026-04-22T10:00:05Z"
-  }
-}
-```
-
-实现约束：
+行为约束：
 
 - 用户消息先落库
-- assistant 消息不做占位消息更新
-- 仅在 `message.completed` 后写正式 assistant 消息
-- 若流失败，不写半成品 assistant 消息
-- 引用依据仅在 `message.completed` 后写入 `citation_evidences`
-- 记忆范围仅限当前会话：
-  - 短期记忆来自最近消息窗口
-  - 长期记忆来自当前会话摘要
+- 模型可在当前轮判断是否检索知识库
+- 模型可在当前轮判断是否调用智能体、MCP、Skills
+- 最终 assistant 消息在完成后落库
 
-## 5. Task Events
+### 4.5 Chat SSE 事件
 
-### 5.1 `GET /tasks/{id}/events`
+聊天 SSE 事件统一为：
+
+- `message.started`
+- `message.delta`
+- `message.progress`
+- `message.tool`
+- `message.info`
+- `message.completed`
+- `message.failed`
+- `ping`
+
+`message.tool` 事件的 `tool` 字段允许表示：
+
+- `knowledge_retrieval`
+- `agent_workflow`
+- `mcp_call`
+- `skill_call`
+
+## 5. Knowledge
+
+知识库是独立模块，但主要服务于聊天阶段的按需检索。
+
+### 5.1 `GET /knowledge/bases`
 
 用途：
 
-- 订阅研究任务进度流
+- 获取当前用户的知识库列表
 
-实现策略：
+### 5.2 `POST /knowledge/bases`
 
-1. API 连接建立后先读取数据库并发送 `task.snapshot`
-2. 再桥接 Redis Pub/Sub 实时事件
+用途：
 
-SSE 事件：
+- 创建知识库
 
-#### `task.snapshot`
+请求体至少包含：
+
+- `name`
+- `description`
+
+### 5.3 `GET /knowledge/bases/{id}`
+
+用途：
+
+- 获取单个知识库详情
+
+### 5.4 `POST /knowledge/files/upload`
+
+用途：
+
+- 上传知识文件
+
+请求：
+
+- `multipart/form-data`
+
+返回对象：
+
+- `KnowledgeFileDTO`
+
+### 5.5 `POST /knowledge/import/arxiv`
+
+用途：
+
+- 从 arXiv 导入资料
+
+### 5.6 `POST /knowledge/session-bindings`
+
+用途：
+
+- 把知识库绑定到某个会话
+
+请求体至少包含：
+
+- `session_id`
+- `knowledge_base_id`
+- `binding_type`
+
+## 6. Agents
+
+### 6.1 `GET /agents/workflows`
+
+用途：
+
+- 获取当前已注册工作流列表
+
+### 6.2 `GET /agents/workflows/{id}`
+
+用途：
+
+- 获取单个工作流定义
+
+### 6.3 `GET /agents/workflows/{id}/nodes`
+
+用途：
+
+- 获取工作流节点定义
+- 若传入 `task_id`，则返回该任务对应的节点运行状态
+
+返回对象：
+
+- `WorkflowNodeRunDTO[]`
+
+## 7. Tasks
+
+后台任务页主要展示智能体 / 工作流执行进度，因此任务接口围绕任务与工作流运行展开。
+
+### 7.1 `POST /tasks`
+
+用途：
+
+- 创建研究任务
+
+请求体建议包含：
+
+- `session_id`
+- `topic`
+- `keywords`
+- `knowledge_base_ids`
+- `source_config`
+
+说明：
+
+- 当前版本的任务会在 API 进程内异步执行
+- `source_config` 可包含任务恢复策略，例如最大重试次数和备用模型覆盖配置
+
+### 7.2 `GET /tasks`
+
+用途：
+
+- 获取任务列表
+
+### 7.3 `GET /tasks/{id}`
+
+用途：
+
+- 获取任务详情，包括当前工作流与节点摘要
+
+### 7.4 `GET /tasks/{id}/report`
+
+用途：
+
+- 获取任务产物或摘要报告
+
+### 7.5 `GET /tasks/{id}/events`
+
+用途：
+
+- 订阅任务与工作流进度流
+
+任务 SSE 事件统一为：
+
+- `task.snapshot`
+- `task.progress`
+- `task.node.started`
+- `task.node.retrying`
+- `task.node.paused`
+- `task.node.completed`
+- `task.node.failed`
+- `task.paused`
+- `task.resumed`
+- `task.completed`
+- `task.failed`
+
+其中：
+
+- `task.snapshot` 返回任务当前全量快照
+- `task.node.*` 用于后台任务页展示智能体节点进度
+
+### 7.6 `POST /tasks/{id}/resume`
+
+用途：
+
+- 从失败节点恢复当前任务
+
+请求体：
 
 ```json
 {
-  "event": "task.snapshot",
-  "data": {
-    "task_id": "uuid",
-    "status": "running",
-    "current_node": "reading_agent_node",
-    "progress_percent": 40.0
+  "resume_from_node": "analyse_agent_node",
+  "model_slot_overrides": {
+    "reasoning_model": "conversation_model"
   }
 }
 ```
 
-#### 其他事件
+行为约束：
 
-- `task.created`
-- `task.node.started`
-- `task.node.completed`
-- `task.node.failed`
-- `task.progress`
-- `task.completed`
-- `task.failed`
-- `task.canceled`
+- 仅 `paused / failed` 状态允许恢复
+- 恢复后从指定节点重新执行，并继续后续节点
 
-统一事件载荷建议包含：
+## 8. MCP Services
 
-- `task_id`
-- `status`
-- `current_node`
-- `progress_percent`
-- `detail`
-- `occurred_at`
+### 8.1 `GET /mcp/servers`
 
-## 6. 分页约定
+用途：
 
-### 6.1 列表资源
+- 获取 MCP 服务配置列表
 
-适用：
+### 8.2 `POST /mcp/servers`
 
-- `GET /workspaces`
-- `GET /tasks`
-- `GET /knowledge`
+用途：
 
-查询参数：
+- 新增 MCP 服务配置
 
-- `page`: 默认 `1`
-- `page_size`: 默认 `20`，最大 `100`
+### 8.3 `POST /mcp/servers/import-local`
 
-返回结构：
+用途：
 
-```json
-{
-  "items": [],
-  "page": 1,
-  "page_size": 20,
-  "total": 0,
-  "has_more": false
-}
-```
+- 导入本地 MCP 服务配置
 
-### 6.2 时间线资源
+## 9. Skills
 
-适用：
+### 9.1 `GET /skills`
 
-- `GET /conversations/{id}/messages`
+用途：
 
-查询参数：
+- 获取 Skill 列表
 
-- `before`
-- `limit`
+### 9.2 `POST /skills`
 
-## 7. 错误码
+用途：
 
-首批稳定错误码：
+- 新增 Skill 配置
 
-- `OK`
-- `AUTH_INVALID_CREDENTIALS`
-- `AUTH_SESSION_EXPIRED`
-- `AUTH_FORBIDDEN`
-- `CHAT_CONVERSATION_NOT_FOUND`
-- `CHAT_MESSAGE_TOO_LARGE`
-- `CHAT_STREAM_FAILED`
-- `WORKSPACE_NOT_FOUND`
-- `KNOWLEDGE_FILE_TOO_LARGE`
-- `KNOWLEDGE_UNSUPPORTED_TYPE`
-- `TASK_NOT_FOUND`
-- `TASK_INVALID_STATE`
-- `INTERNAL_ERROR`
+### 9.3 `POST /skills/import-local`
 
-建议 HTTP 映射：
+用途：
 
-- `400`: 参数错误
-- `401`: 未登录或会话失效
-- `403`: 无权限
-- `404`: 资源不存在
-- `409`: 状态冲突
-- `413`: 文件或消息体过大
-- `500`: 内部错误
+- 导入本地 Skill
 
-## 8. 前端接入约定
+## 10. Models
 
-- 普通 JSON API：axios + `withCredentials: true`
-- SSE：`@microsoft/fetch-event-source` + `credentials: "include"`
-- 前端启动流程：
-  1. 调 `GET /me`
-  2. 成功则恢复登录态
-  3. 失败则跳转登录页
-- 聊天发送流程：
-  1. 本地创建 assistant draft
-  2. 消费 `message.delta`
-  3. `message.completed` 后用正式消息替换 draft
-  4. `message.failed` 时清理 draft 并提示错误
+### 10.1 `GET /models/routes`
+
+用途：
+
+- 获取模型槽位与路由配置
+
+### 10.2 `PUT /models/routes`
+
+用途：
+
+- 更新模型路由配置
+
+模型槽位至少包括：
+
+- `conversation`
+- `tool_call`
+- `reasoning`
+- `embedding`
+- `rerank`
+
+## 11. Dashboard
+
+### 11.1 `GET /dashboard/overview`
+
+用途：
+
+- 获取系统观测摘要
+
+返回对象建议包含：
+
+- `model_call_count`
+- `input_token_count`
+- `output_token_count`
+- `task_status_distribution`
+- `recent_task_count`
+
+## 12. 兼容接口说明
+
+### 12.1 `GET /conversations/inbox`
+
+该接口可继续保留，但定义为：
+
+- 当前实现兼容接口
+- 不再作为产品主对象入口
+
+兼容原因：
+
+- 当前前端与部分后端结构仍使用默认收件箱容器
+
+### 12.2 Workspace 相关语义
+
+新的 API 契约不再把 `workspace` 作为对前端的核心资源。
+
+若当前实现中仍存在：
+
+- `chat_sessions.workspace_id`
+- `research_tasks.workspace_id`
+
+则应视为内部兼容字段，不构成新产品主语义。
+
+## 13. 契约冻结结论
+
+PaperChatAgent V1 的 API 契约应满足：
+
+- 会话是主资源对象
+- 知识库、智能体、MCP、Skills、模型、后台任务、看板都是独立资源模块
+- 聊天接口允许模型自主检索和工具调用
+- 后台任务接口重点暴露工作流节点进度

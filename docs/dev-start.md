@@ -2,138 +2,53 @@
 
 ## 1. 文档目标
 
-本文档用于说明如何从当前仓库出发，搭建 PaperChatAgent 的首个可运行开发环境。
-
-本文档只覆盖：
-
-- 本地开发环境
-- 本地测试环境
-- 服务依赖准备
-- 推荐命令与目录结构
-
-本文档不覆盖：
-
-- 正式生产部署
-- 云资源编排
-- CI/CD
-
-## 2. 推荐仓库结构
-
-建议在当前仓库中逐步形成如下结构：
-
-```text
-PaperChatAgent/
-├── apps/
-│   ├── frontend/
-│   ├── backend/
-│   └── worker/
-├── docs/
-├── designs/
-├── images/
-├── 需求文档.md
-├── requirements.md
-└── README.md
-```
+本文档用于说明 PaperChatAgent V1 的本地开发准备、配置方式、启动命令和当前实现状态。
 
 说明：
 
-- `frontend`：Vue 3 工作台
-- `backend`：FastAPI API 服务
-- `worker`：异步研究任务执行器
+- 新文档以“聊天主链路 + 模块化能力”作为目标口径
+- 当前仓库仍有部分旧命名和过渡结构
+- 本文档会同时标注目标模块和当前实现现状
 
-## 3. 包管理与命令约定
+## 2. 本地环境准备
 
-### 3.1 前端
+建议准备：
 
-- 包管理：`pnpm`
-- 路由：`vue-router`
-- 状态管理：`pinia`
-- 组件库：`element-plus`
-- 原因：
-  - 安装速度快
-  - 更适合 Monorepo
-  - 前端生态兼容良好
-  - 方便快速搭建工作台类业务页面
-
-### 3.2 后端
-
-- 包管理与环境管理：`uv`
-- 原因：
-- 环境初始化快
-- 适合现代 Python 项目启动
-- 比 Poetry 更轻
-
-### 3.3 工作流与聊天依赖
-
-后端依赖层从一开始就明确以下两条主线：
-
-- 聊天层：LangChain
-- 工作流层：AutoGen + LangGraph
-
-## 4. 本地依赖服务
-
-V1 推荐准备以下依赖服务：
-
-- MySQL
-- Redis
+- Node.js 18+
+- pnpm
+- Python 3.11+
+- uv
+- MySQL 8+
 - MinIO
 - ChromaDB
 
-## 5. 启动方式
+## 3. 配置文件
 
-### 5.1 推荐方式：Docker Compose
-
-推荐使用 Docker Compose 启动本地依赖服务，因为：
-
-- 环境一致性更好
-- 新开发者更容易复现
-- 与 README 和示例 YAML 更容易保持一致
-
-### 5.2 兼容方式：本机直连
-
-如果开发机已经常驻以下服务，也允许直接在 `config.yaml` 中配置本机地址：
-
-- 本地 MySQL
-- 本地 Redis
-- 本地 MinIO
-- 本地 Chroma
-
-## 6. 配置文件
-
-### 6.1 文件约定
+后端配置建议使用：
 
 - `apps/backend/paperchat/config.example.yaml`
 - `apps/backend/paperchat/config.yaml`
 
-### 6.2 使用方式
+建议配置段包括：
 
-```bash
-cp apps/backend/paperchat/config.example.yaml apps/backend/paperchat/config.yaml
-```
+- `server`
+- `mysql`
+- `storage`
+- `vector_db`
+- `model_routes`
+- `mcp`
+- `skills`
 
-然后填写：
-
-- MySQL 地址
-- Redis 地址
-- MinIO 地址
-- ChromaDB 地址
-- 模型密钥与 base_url
-- LangChain / AutoGen 所需模型路由配置
-
-### 6.3 示例配置结构
+### 3.1 配置示例
 
 ```yaml
 server:
-  env: "dev"
   host: "127.0.0.1"
   port: 8000
 
 mysql:
   endpoint: "mysql+pymysql://root:password@127.0.0.1:3306/paperchatagent"
   async_endpoint: "mysql+aiomysql://root:password@127.0.0.1:3306/paperchatagent"
-
-redis:
-  endpoint: "redis://127.0.0.1:6379"
 
 storage:
   mode: "minio"
@@ -144,84 +59,48 @@ storage:
     bucket_name: "paperchatagent"
 
 vector_db:
-  mode: "chroma"
-  host: "127.0.0.1"
-  port: 8001
+  provider: "chromadb"
+  endpoint: "http://127.0.0.1:8001"
 
-multi_models:
-  conversation_model:
-    api_key: "your-key"
+model_routes:
+  conversation:
+    provider: "openai_compatible"
     base_url: "https://your-openai-compatible-endpoint/v1"
-    model_name: "gpt-4o-mini"
-  tool_call_model:
     api_key: "your-key"
+    model_name: "gpt-4o-mini"
+  tool_call:
+    provider: "openai_compatible"
     base_url: "https://your-openai-compatible-endpoint/v1"
-    model_name: "gpt-4o-mini"
-  reasoning_model:
     api_key: "your-key"
+    model_name: "gpt-4o-mini"
+  reasoning:
+    provider: "openai_compatible"
     base_url: "https://your-reasoning-endpoint/v1"
-    model_name: "deepseek-reasoner"
-  qwen_vl:
-    api_key: "${DASHSCOPE_API_KEY}"
-    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model_name: "qwen-vl-plus"
-  embedding:
     api_key: "your-key"
+    model_name: "deepseek-reasoner"
+  embedding:
+    provider: "openai_compatible"
     base_url: "https://your-embedding-endpoint/v1"
+    api_key: "your-key"
     model_name: "text-embedding-3-large"
   rerank:
+    provider: "http"
+    base_url: "https://your-rerank-endpoint"
     api_key: "your-key"
-    base_url: "https://your-rerank-endpoint/v1"
     model_name: "rerank-model"
-  text2image:
-    api_key: "${DASHSCOPE_API_KEY}"
-    base_url: "https://your-text2image-endpoint"
-    model_name: "text2image-model"
 
-workflow:
-  engine: "langgraph"
-  agents_runtime: "autogen"
-  hitl_enabled: true
+mcp:
+  enabled: true
+  servers: []
+
+skills:
+  enabled: true
+  items: []
 ```
 
-## 7. 首次启动路径
+## 4. 启动方式
 
-### 7.1 起依赖服务
-
-优先方式：
-
-```bash
-docker compose up -d
-```
-
-### 7.2 配置 YAML
-
-- 复制 `config.example.yaml`
-- 填写数据库、Redis、MinIO、模型密钥
-
-### 7.3 启动 backend
-
-建议命令形态：
-
-```bash
-cd apps/backend
-uv sync
-uv run uvicorn paperchat.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 7.4 启动 worker
-
-建议命令形态：
-
-```bash
-cd apps/worker
-uv sync
-uv run python -m paperchat_worker.main
-```
-
-### 7.5 启动 frontend
-
-建议命令形态：
+### 4.1 启动前端
 
 ```bash
 cd apps/frontend
@@ -229,51 +108,159 @@ pnpm install
 pnpm dev
 ```
 
-前端默认依赖建议包括：
+默认访问：
+
+- `http://127.0.0.1:5173`
+
+### 4.2 启动后端
 
 ```bash
-pnpm add vue-router pinia element-plus @element-plus/icons-vue axios
+cd apps/backend
+uv sync
+cp paperchat/config.example.yaml paperchat/config.yaml
+uv run uvicorn paperchat.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-
-### 7.6 访问默认聊天页
 
 默认访问：
 
-- Frontend：`http://127.0.0.1:5173`
-- Backend：`http://127.0.0.1:8000`
+- API：`http://127.0.0.1:8000/api/v1`
+- Swagger：`http://127.0.0.1:8000/swagger`
 
-登录成功后应进入默认聊天页。
+### 4.3 启动依赖服务
 
-## 8. README 需要同步的信息
+本地至少需要可用的：
 
-README 至少应补充以下索引：
+- MySQL
+- MinIO
+- ChromaDB
 
-- 开发准备
-- 架构文档
-- 技术方案
-- 数据模型
-- 启动说明
+项目当前未提供统一的依赖编排脚本时，可使用你自己的本地常驻服务或 Compose 环境。
 
-## 9. 开发第一阶段建议顺序
+## 5. 模块级开发说明
 
-建议按以下顺序开始实现：
+### 5.1 Chat
 
-1. 初始化 Monorepo 目录结构
-2. 搭建 FastAPI 基础服务和认证
-3. 搭建 LangChain 模型管理与聊天服务
-4. 搭建 Vue 工作台壳与默认聊天页
-5. 接入 MySQL / Redis / MinIO / Chroma
-6. 搭建工作区与会话模型
-7. 搭建任务创建与 SSE 进度流
-8. 接入完整 Paper-Agent 风格工作流
-9. 打通知识上传、arXiv 导入与报告产物回流
+当前是最先联调的模块。
 
-## 10. 验收标准
+开发重点：
 
-当以下条件满足时，可认为开发环境准备完成：
+- 会话列表
+- 消息列表
+- SSE 聊天流
+- 会话级长期摘要
+- 自主检索 / 自主工具调用的演进空间
 
-- 一条命令或一组明确命令可以启动本地依赖服务
-- backend 可启动
-- worker 可启动
-- frontend 可启动
-- 用户登录后能进入默认聊天页
+### 5.2 Knowledge
+
+目标职责：
+
+- 知识库创建
+- 文件上传与导入
+- 文档解析
+- 切片与向量化
+- 为聊天检索提供来源
+
+当前状态：
+
+- 已有基础资料上传和导入接口
+- 知识库主表与向量检索闭环仍在后续范围
+
+### 5.3 Agents
+
+目标职责：
+
+- 注册与展示内置工作流
+- 为聊天和后台任务提供可调用工作流能力
+
+当前状态：
+
+- 已有默认工作流与节点说明接口
+- 当前内置多节点研究工作流骨架
+
+### 5.4 Models
+
+目标职责：
+
+- 统一模型配置
+- 统一逻辑槽位路由
+
+当前状态：
+
+- provider 抽象已存在
+- 独立模型模块页面与完整配置接口仍待补齐
+
+### 5.5 MCP / Skills
+
+目标职责：
+
+- 管理配置列表
+- 导入本地项
+- 新增自定义项
+
+当前状态：
+
+- 前端和后端还未完整实现为独立模块
+
+### 5.6 Tasks
+
+目标职责：
+
+- 展示研究任务
+- 展示工作流运行与节点进度
+- 返回结果摘要
+
+当前状态：
+
+- 已有任务创建、任务列表、任务详情、任务事件流
+- 当前页面定位延续“展示智能体进度”的产品认知
+- 当前执行方式为进程内异步任务
+- 当前恢复机制包含自动重试、节点暂停、从失败节点续跑、备用模型切换、checkpoint 持久化
+
+### 5.7 Dashboard
+
+目标职责：
+
+- 展示模型调用、输入输出量、任务分布等指标
+
+当前状态：
+
+- 仍为待扩展模块
+
+## 6. 当前实现过渡说明
+
+当前代码库中仍保留一些历史命名：
+
+- `WorkbenchLayout`
+- `paperchat_workspaces`
+- `workspace_id` 相关字段
+
+这些名称不再代表新的产品主叙事，只是当前代码兼容结构。
+
+同样地：
+
+- 当前版本不再保留独立 worker 骨架
+- 任务逻辑统一运行在后端进程内
+
+## 7. 推荐开发顺序
+
+建议按以下顺序推进：
+
+1. 完成认证与会话恢复
+2. 打通聊天主链路
+3. 补齐知识库创建、文件上传、解析与索引
+4. 补齐模型路由配置
+5. 打通智能体工作流与任务进度
+6. 增加 MCP 模块与 Skills 模块
+7. 增加数据看板
+8. 逐步清理旧的 `workspace / workbench` 命名
+
+## 8. 验收标准
+
+当以下条件满足时，可认为本地开发环境可用：
+
+- 前端可以启动
+- 后端可以启动
+- 用户登录后可进入聊天页
+- 聊天接口可工作
+- 任务接口可工作
+- 至少具备知识资料上传或导入的基础能力

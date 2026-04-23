@@ -2,7 +2,11 @@
 
 ## 1. 文档目标
 
-本文档用于冻结 V1 的核心业务对象、关键关系和状态机，避免实现阶段因对象命名或归属边界不清导致重复返工。
+本文档用于冻结 PaperChatAgent V1 的核心对象、关键关系和状态机，确保数据模型服务于“聊天主链路 + 模块化能力”。
+
+本轮数据模型的第一原则是：
+
+`会话是主对象，知识库 / 智能体 / 模型 / 工具 / 任务都是围绕会话协同工作的独立模块。`
 
 ## 2. 核心实体
 
@@ -16,12 +20,28 @@
 - `email`
 - `password_hash`
 - `display_name`
+- `avatar_url`
+- `status`
 - `created_at`
 - `updated_at`
 
-### 2.2 InboxConversation
+### 2.2 UserSession
 
-表示用户的默认容器，用于承接初始会话，不直接作为聊天前端主对象。
+表示登录态与刷新令牌会话。
+
+建议字段：
+
+- `id`
+- `user_id`
+- `refresh_token_hash`
+- `expires_at`
+- `revoked_at`
+- `created_at`
+- `updated_at`
+
+### 2.3 ChatSession
+
+表示用户长期使用和切换的主对象。
 
 建议字段：
 
@@ -29,151 +49,41 @@
 - `user_id`
 - `title`
 - `status`
-- `created_at`
-- `updated_at`
-
-说明：
-
-- 每个用户默认至少有一个 `InboxConversation`
-- 新创建的聊天会话默认可挂在该容器下
-
-### 2.3 ResearchWorkspace
-
-表示围绕一个研究主题建立的长期空间。
-
-建议字段：
-
-- `id`
-- `user_id`
-- `name`
-- `description`
-- `origin_inbox_conversation_id`
-- `status`
-- `share_token`
-- `created_at`
-- `updated_at`
-
-### 2.4 ChatSession
-
-表示聊天主对象，是用户实际感知和切换的“最近会话”。
-
-建议字段：
-
-- `id`
-- `user_id`
-- `workspace_id`（可空）
-- `inbox_conversation_id`（可空）
-- `title`
 - `memory_summary_text`
 - `last_summarized_message_id`
+- `last_message_at`
 - `created_at`
 - `updated_at`
 
 约束：
 
-- `workspace_id` 与 `inbox_conversation_id` 至少有一个存在
-- 当前聊天主流程仅依赖 `ChatSession`
+- 聊天主链路以 `ChatSession` 为中心
 - 长短期记忆都按 `ChatSession` 隔离
 
-### 2.5 Message
+### 2.4 Message
 
-表示单条消息。
+表示会话中的单条消息。
 
 建议字段：
 
 - `id`
 - `session_id`
 - `role`
-- `content`
 - `message_type`
-- `citation_payload`
-- `created_at`
-
-说明：
-
-- `role` 可取 `user / assistant / system`
-- `message_type` 可区分普通消息、任务建议、系统提示
-
-### 2.6 KnowledgeBase
-
-表示知识库容器。
-
-建议字段：
-
-- `id`
-- `user_id`
-- `workspace_id`（可空）
-- `name`
-- `scope`
-- `created_at`
-- `updated_at`
-
-`scope` 取值建议：
-
-- `global`
-- `workspace_private`
-
-### 2.7 KnowledgeFile
-
-表示知识库中的文件或论文资源。
-
-建议字段：
-
-- `id`
-- `knowledge_base_id`
-- `workspace_id`（可空）
-- `source_type`
-- `title`
-- `source_url`
-- `object_key`
-- `status`
+- `content`
 - `metadata_json`
 - `created_at`
-- `updated_at`
 
-`source_type` 建议：
+`message_type` 建议支持：
 
-- `upload_pdf`
-- `arxiv`
+- `chat`
+- `system_notice`
+- `task_event`
+- `tool_result`
 
-### 2.8 ResearchTask
+### 2.5 CitationEvidence
 
-表示一次异步研究流程。
-
-建议字段：
-
-- `id`
-- `user_id`
-- `workspace_id`
-- `title`
-- `status`
-- `task_type`
-- `payload_json`
-- `result_summary`
-- `current_node`
-- `created_at`
-- `started_at`
-- `finished_at`
-
-### 2.9 TopicExplorationPackage
-
-表示研究任务完成后沉淀出的主题语料上下文。
-
-建议字段：
-
-- `id`
-- `workspace_id`
-- `task_id`
-- `title`
-- `summary`
-- `package_json`
-- `report_markdown`（可空）
-- `created_at`
-- `updated_at`
-
-### 2.10 CitationEvidence
-
-表示回答所引用的来源依据。
+表示消息所引用的来源依据。
 
 建议字段：
 
@@ -185,79 +95,287 @@
 - `locator_json`
 - `created_at`
 
-`citation_level` 建议：
+### 2.6 KnowledgeBase
 
-- `paper`
-- `section`
-- `paragraph`
+表示一个资料容器。
+
+建议字段：
+
+- `id`
+- `user_id`
+- `name`
+- `description`
+- `status`
+- `created_at`
+- `updated_at`
+
+说明：
+
+- 知识库是独立模块对象
+- 一个知识库下可包含多个文件和切片
+
+### 2.7 KnowledgeFile
+
+表示知识库中的文件或外部资料。
+
+建议字段：
+
+- `id`
+- `knowledge_base_id`
+- `user_id`
+- `source_type`
+- `title`
+- `source_url`
+- `object_key`
+- `parser_status`
+- `index_status`
+- `metadata_json`
+- `created_at`
+- `updated_at`
+
+### 2.8 KnowledgeChunk
+
+表示一个可检索切片。
+
+建议字段：
+
+- `id`
+- `knowledge_file_id`
+- `chunk_index`
+- `content`
+- `page_no`
+- `section_title`
+- `vector_collection`
+- `vector_doc_id`
+- `locator_json`
+- `created_at`
+
+### 2.9 SessionKnowledgeBinding
+
+表示会话与知识库之间的绑定关系。
+
+建议字段：
+
+- `id`
+- `session_id`
+- `knowledge_base_id`
+- `binding_type`
+- `created_at`
+
+说明：
+
+- 允许一个会话绑定多个知识库
+- 允许系统在聊天中自动建议绑定或创建知识库
+
+### 2.10 ResearchTask
+
+表示用户确认主题后触发的一次异步研究任务。
+
+建议字段：
+
+- `id`
+- `user_id`
+- `session_id`
+- `title`
+- `status`
+- `current_node`
+- `progress_percent`
+- `detail`
+- `payload_json`
+- `checkpoint_json`
+- `created_at`
+- `updated_at`
+
+说明：
+
+- `ResearchTask` 来源于聊天，而不是来源于工作区概念
 
 ### 2.11 WorkflowRun
 
-表示研究工作流某一次实际运行记录。
+表示一次真实工作流执行。
 
 建议字段：
 
 - `id`
 - `task_id`
-- `workflow_name`
-- `current_node`
+- `workflow_id`
 - `status`
-- `node_statuses_json`
+- `current_node`
 - `trace_json`
 - `created_at`
 - `updated_at`
 
+### 2.12 WorkflowNodeRun
+
+表示工作流中单个节点的运行状态。
+
+建议字段：
+
+- `id`
+- `workflow_run_id`
+- `node_id`
+- `title`
+- `status`
+- `detail`
+- `started_at`
+- `completed_at`
+- `metadata_json`
+
+说明：
+
+- 后台任务页主要消费该对象来展示智能体进度
+
+### 2.13 TaskArtifact
+
+表示任务产物或结果摘要。
+
+建议字段：
+
+- `id`
+- `task_id`
+- `artifact_type`
+- `title`
+- `summary`
+- `content_markdown`
+- `metadata_json`
+- `created_at`
+- `updated_at`
+
+### 2.14 AgentWorkflow
+
+表示一个已注册的智能体 / 工作流定义。
+
+建议字段：
+
+- `id`
+- `name`
+- `description`
+- `status`
+- `definition_json`
+- `created_at`
+- `updated_at`
+
+### 2.15 McpServerConfig
+
+表示一个 MCP 服务配置。
+
+建议字段：
+
+- `id`
+- `user_id`
+- `name`
+- `transport_type`
+- `endpoint`
+- `auth_config_json`
+- `metadata_json`
+- `status`
+- `created_at`
+- `updated_at`
+
+### 2.16 SkillConfig
+
+表示一个 Skill 配置对象。
+
+建议字段：
+
+- `id`
+- `user_id`
+- `name`
+- `source_type`
+- `path_or_repo`
+- `metadata_json`
+- `status`
+- `created_at`
+- `updated_at`
+
+### 2.17 ModelRouteConfig
+
+表示逻辑模型槽位的路由配置。
+
+建议字段：
+
+- `id`
+- `user_id`
+- `route_key`
+- `provider`
+- `model_name`
+- `base_url`
+- `metadata_json`
+- `status`
+- `created_at`
+- `updated_at`
+
+`route_key` 至少包括：
+
+- `conversation`
+- `tool_call`
+- `reasoning`
+- `embedding`
+- `rerank`
+
+### 2.18 DashboardMetricSnapshot
+
+表示用于数据看板的指标快照。
+
+建议字段：
+
+- `id`
+- `metric_key`
+- `metric_value`
+- `dimension_json`
+- `recorded_at`
+
 ## 3. 核心关系
 
-## 3.1 InboxConversation -> ChatSession
+### 3.1 User -> ChatSession
 
-`InboxConversation` 作为系统默认容器存在，但前端主体验围绕 `ChatSession` 展开。
-
-实现约束：
-
-- 用户进入系统后至少拥有一个默认 `ChatSession`
-- 用户可继续创建多个新的 `ChatSession`
+- 一个用户拥有多个会话
 - 最近会话列表按 `ChatSession.updated_at` 展示
 
-## 3.2 全局知识库 + 工作区私有知识库
+### 3.2 ChatSession -> Message
 
-知识库模型采用双层结构：
+- 一个会话包含多条消息
+- 消息按时间和顺序组织
 
-- `全局知识库`
-  - 归属于用户
-  - 不归属于具体工作区
-  - 可跨工作区复用
+### 3.3 ChatSession -> KnowledgeBase
 
-- `工作区私有知识库`
-  - 归属于单个工作区
-  - 只服务当前研究主题
-  - 不被其他工作区直接复用
+- 会话与知识库之间通过绑定关系连接
+- 绑定既可以由用户显式完成，也可以由系统建议后确认
 
-## 3.3 ResearchTask -> TopicExplorationPackage
+### 3.4 KnowledgeBase -> KnowledgeFile -> KnowledgeChunk
 
-- 一个 `ResearchTask` 在成功完成后，可以生成一个或多个 `TopicExplorationPackage`
-- V1 默认按“每个任务产出一个主探索包”组织
+- 一个知识库包含多个知识文件
+- 一个知识文件产生多个可检索切片
 
-## 3.4 ChatSession -> 会话级记忆
+### 3.5 ChatSession -> ResearchTask
 
-- 短期记忆来自当前会话最近消息窗口
-- 长期记忆来自 `ChatSession.memory_summary_text`
-- 不同会话之间不共享记忆
+- 研究任务由聊天触发
+- 一个会话可以触发多个任务
 
-## 3.5 分享链接
+### 3.6 ResearchTask -> WorkflowRun -> WorkflowNodeRun
 
-- 分享链接与 `ResearchWorkspace` 关联
-- 分享为只读，不产生新的业务实体副本
-- 分享访问不允许修改源对象
+- 一个任务对应一次或多次工作流运行
+- 一个工作流运行下有多个节点运行记录
+
+### 3.7 ResearchTask -> TaskArtifact
+
+- 一个任务可以产出多个任务产物
+- V1 至少需要支持结果摘要和 Markdown 报告类产物
+
+### 3.8 User -> McpServerConfig / SkillConfig / ModelRouteConfig
+
+- 这些配置都归属于用户
+- 它们为聊天和任务执行提供能力支持
 
 ## 4. 状态机
 
 ### 4.1 ResearchTask
 
-状态：
+状态建议：
 
 - `queued`
 - `running`
+- `paused`
 - `completed`
 - `failed`
 - `canceled`
@@ -266,142 +384,95 @@
 
 ```text
 queued -> running -> completed
-queued -> running -> failed
+queued -> running -> paused
+paused -> running -> completed
+paused -> running -> failed
 queued -> canceled
 running -> canceled
-failed -> queued   # retry
+failed -> queued   # 创建新任务重试
 ```
 
-### 4.1.1 WorkflowNodeStatus
+### 4.2 WorkflowNodeRun
 
-`WorkflowNodeStatus` 建议统一取值：
+状态建议：
 
 - `pending`
 - `running`
+- `retrying`
+- `paused`
 - `completed`
 - `failed`
 - `skipped`
 
-默认节点集合：
+### 4.3 KnowledgeFile
 
-- `search_agent_node`
-- `reading_agent_node`
-- `analyse_agent_node`
-- `writing_agent_node`
-- `report_agent_node`
-
-### 4.2 KnowledgeFile
-
-状态：
+解析状态建议：
 
 - `uploaded`
 - `parsing`
-- `indexed`
-- `attached`
+- `parsed`
 - `failed`
 
-流转建议：
+索引状态建议：
 
-```text
-uploaded -> parsing -> indexed -> attached
-uploaded -> parsing -> failed
-indexed -> attached
-failed -> parsing   # retry
-```
-
-### 4.3 WorkflowRun
-
-状态：
-
-- `queued`
-- `running`
-- `completed`
+- `pending`
+- `indexing`
+- `indexed`
 - `failed`
 
 ## 5. 数据归属边界
 
-### 5.1 用户与工作区
+### 5.1 会话
 
-- 所有工作区归属于单一用户
-- V1 不支持多人共用同一工作区编辑
+- 会话归属于单一用户
+- 不同会话之间默认不共享记忆
 
-### 5.2 全局知识库
+### 5.2 知识库
 
-- 归属用户
-- 不归属单工作区
-- 可被多个工作区引用
+- 知识库归属于单一用户
+- 同一知识库可服务多个会话
 
-### 5.3 工作区私有知识库
+### 5.3 任务与工作流
 
-- 归属用户与单一工作区
-- 不能被其他工作区直接共享
+- 任务归属于单一用户与单一会话
+- 节点运行记录归属于单次工作流运行
 
-### 5.4 分享链接
+### 5.4 配置模块
 
-- 只读访问工作区结果
-- 不复制、不迁移、不改写源实体
+- MCP / Skills / 模型路由均按用户维度管理
 
-## 6. 表/模型草案层级
+## 6. 兼容与过渡说明
 
-### 6.1 用户与认证
-
-- `users`
-- `auth_sessions`（如需要）
-- `refresh_tokens`（如需要）
-
-### 6.2 会话与消息
-
-- `inbox_conversations`
-- `chat_sessions`
-- `messages`
-- `session_memories`（若不直接复用 `chat_sessions` 字段）
-
-### 6.3 工作区与分享
-
-- `research_workspaces`
-- `workspace_share_links`
-
-### 6.4 知识库与文件
-
-- `knowledge_bases`
-- `knowledge_files`
-- `workspace_knowledge_links`
-
-### 6.5 任务与工作流
-
-- `research_tasks`
-- `workflow_runs`
-- `workflow_node_events`（可选）
-
-### 6.6 主题探索包与引用依据
-
-- `topic_exploration_packages`
-- `citation_evidences`
-- `report_artifacts`（可选）
-
-## 7. 统一类型名
-
-后续文档和代码中统一使用以下类型名：
+当前代码中仍存在以下旧对象或旧表语义：
 
 - `InboxConversation`
 - `ResearchWorkspace`
-- `ResearchTask`
-- `TopicExplorationPackage`
-- `CitationEvidence`
+- `paperchat_workspaces`
+- `chat_sessions.workspace_id`
+
+新的数据模型口径如下：
+
+- `ChatSession` 才是用户主对象
+- `ResearchWorkspace` 不再作为产品层主对象
+- 若当前实现仍使用 `workspace` 字段承载任务容器，应视为内部过渡结构
+
+## 7. 统一类型名
+
+后续文档优先使用以下类型名：
+
+- `ChatSession`
+- `Message`
+- `KnowledgeBase`
 - `KnowledgeFile`
-- `WorkflowNodeStatus`
-
-## 8. 与完整工作流的关系
-
-当前数据模型不再只服务“聊天 + 轻量任务”，而是明确支持完整的 `AutoGen + LangGraph` 研究工作流：
-
-- 搜索节点负责生成结构化检索输入与 HITL 审查状态
-- 阅读节点负责结构化论文抽取结果
-- 分析节点负责聚类与全局分析结果
-- 写作节点负责章节与写作过程状态
-- 报告节点负责最终 Markdown 报告工件
-
-如果某阶段的 UI 尚未完全开放，数据模型仍然为这些工作流阶段预留持久化空间。
+- `KnowledgeChunk`
+- `ResearchTask`
+- `WorkflowRun`
+- `WorkflowNodeRun`
+- `TaskArtifact`
+- `AgentWorkflow`
+- `McpServerConfig`
+- `SkillConfig`
+- `ModelRouteConfig`
 
 ## 8. 非目标
 
@@ -409,5 +480,5 @@ failed -> parsing   # retry
 
 - 字段级 migration 脚本
 - 最终 SQL DDL
+- 多租户模型
 - 复杂版本化策略
-- 多租户设计
