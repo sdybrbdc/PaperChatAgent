@@ -111,40 +111,40 @@ PaperChatAgent 当前采用以下产品定位：
 ### 当前已出图页面
 
 登录页
-![Login](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/auth-login-wireframe.png)
+![Login](images/light-main/auth-login-wireframe.png)
 
 注册页
-![Register](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/auth-register-wireframe.png)
+![Register](images/light-main/auth-register-wireframe.png)
 
 聊天页
-![Chat](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/chat-research-guidance-wireframe.png)
+![Chat](images/light-main/chat-research-guidance-wireframe.png)
 
 知识库列表页
-![Knowledge](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/knowledge-base-list-wireframe.png)
+![Knowledge](images/light-main/knowledge-base-list-wireframe.png)
 
 知识库详情页
-![Knowledge Detail](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/knowledge-base-detail-wireframe.png)
+![Knowledge Detail](images/light-main/knowledge-base-detail-wireframe.png)
 
 MCP 服务页
-![MCP](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/mcp-services-wireframe.png)
+![MCP](images/light-main/mcp-services-wireframe.png)
 
 Skills 页
-![Skills](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/skills-management-wireframe.png)
+![Skills](images/light-main/skills-management-wireframe.png)
 
 智能体列表页
-![Agents](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/agents-list-wireframe.png)
+![Agents](images/light-main/agents-list-wireframe.png)
 
 智能体详情页
-![Agents Detail](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/agents-detail-configuration-wireframe.png)
+![Agents Detail](images/light-main/agents-detail-configuration-wireframe.png)
 
 模型页
-![Models](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/model-routing-wireframe.png)
+![Models](images/light-main/model-routing-wireframe.png)
 
 后台任务页
-![Tasks](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/background-tasks-wireframe.png)
+![Tasks](images/light-main/background-tasks-wireframe.png)
 
 数据看板页
-![Dashboard](/Users/sdybdc/Code/AICode/PaperChatAgent/images/light-main/dashboard-overview-wireframe.png)
+![Dashboard](images/light-main/dashboard-overview-wireframe.png)
 
 ## 技术栈
 
