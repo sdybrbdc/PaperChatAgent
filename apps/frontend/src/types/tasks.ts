@@ -2,7 +2,7 @@ export interface ResearchTaskDTO {
   id: string
   title: string
   subtitle: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  status: 'queued' | 'running' | 'paused' | 'completed' | 'failed'
 }
 
 export interface TaskMetricDTO {

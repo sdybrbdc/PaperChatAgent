@@ -25,15 +25,13 @@ function normalizeKnowledgeBase(base: Record<string, unknown> | undefined): Know
 export async function getKnowledgeOverview() {
   const response = await apiClient.get<
     ApiEnvelope<{
-      global: Record<string, unknown>
-      private: Record<string, unknown>
+      library: Record<string, unknown>
       rail: KnowledgeSideCardDTO[]
     }>
   >('/knowledge')
 
   return {
-    global: normalizeKnowledgeBase(response.data.data.global),
-    private: normalizeKnowledgeBase(response.data.data.private),
+    library: normalizeKnowledgeBase(response.data.data.library),
     rail: response.data.data.rail,
   }
 }

@@ -851,6 +851,10 @@ button {
   color: var(--pc-warning-text);
 }
 
+.task-status.paused {
+  color: var(--pc-warning-text);
+}
+
 .task-status.failed {
   color: var(--pc-danger-text);
 }
