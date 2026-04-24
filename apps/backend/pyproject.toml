@@ -16,11 +16,15 @@ dependencies = [
   "pymysql>=1.1,<2.0",
   "minio>=7.2,<8.0",
   "httpx>=0.28,<1.0",
-  "langchain-core>=0.3,<0.4",
-  "langgraph>=0.2.60,<0.3",
-  "langchain-openai>=0.2,<0.4",
+  "langchain>=1.0,<2.0",
+  "langchain-core>=1.0,<2.0",
+  "langgraph>=1.0,<2.0",
+  "langchain-openai>=1.0,<2.0",
   "autogen-agentchat>=0.7,<0.8",
   "autogen-ext[openai]>=0.7,<0.8",
+  "arxiv>=2.2,<3.0",
+  "pymupdf>=1.26,<2.0",
+  "scikit-learn>=1.7,<2.0",
 ]
 
 [tool.uv]

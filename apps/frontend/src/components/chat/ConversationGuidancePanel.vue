@@ -33,7 +33,7 @@ const emit = defineEmits<{
       </section>
 
       <section v-if="guidance.draft" class="guidance-section guidance-section--draft">
-        <h3>研究草案</h3>
+        <h3>研究方案</h3>
         <div class="guidance-kv">
           <strong>标题</strong>
           <span>{{ guidance.draft.title }}</span>
@@ -79,7 +79,7 @@ const emit = defineEmits<{
         :loading="isGeneratingDraft"
         @click="emit('generateDraft')"
       >
-        生成研究草案
+        生成研究方案
       </el-button>
     </div>
   </aside>

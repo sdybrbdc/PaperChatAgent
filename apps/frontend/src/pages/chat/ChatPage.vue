@@ -58,7 +58,7 @@ async function handleComposerKeydown(event: KeyboardEvent) {
     <header class="chat-header-fixed">
       <div>
         <h2>{{ conversationStore.currentConversation?.title ?? '新聊天' }}</h2>
-        <p>中间保持正常聊天，右侧会在每轮回复后更新专业提示，并在需要时手动生成研究草案。</p>
+        <p>中间保持正常聊天，右侧会在每轮回复后更新专业提示，并在需要时手动生成研究方案。</p>
       </div>
       <div class="page-actions">
         <el-button>上传资料</el-button>

@@ -28,7 +28,7 @@ function normalizeMessage(data: Record<string, unknown>): MessageDTO {
   return {
     id: String(data.id ?? ''),
     role: (data.role as 'user' | 'assistant' | 'system') ?? 'assistant',
-    messageType: 'chat',
+    messageType: String(data.message_type ?? 'chat') as MessageDTO['messageType'],
     content: String(data.content ?? ''),
     metadata: (data.metadata as Record<string, unknown> | undefined) ?? {},
     citations: (data.citations as Array<Record<string, unknown>> | undefined) ?? [],

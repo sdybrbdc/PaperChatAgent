@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from paperchat.api.errcode import AppError
 from paperchat.api.responses.sse import encode_sse, now_iso
 from paperchat.database.dao import memory_store
-from paperchat.services.stream import translate_chat_stream_part
+from paperchat.services.stream import normalize_chat_stream_part, translate_chat_stream_part
 from paperchat.workflows.chat_graph import build_chat_graph
 from paperchat.workflows.guidance_graph import generate_guidance_analysis, generate_research_draft
 
@@ -143,9 +143,9 @@ class ChatService:
             sections.append(
                 {
                     "key": "draft_entry",
-                    "title": "研究草案",
+                    "title": "研究方案",
                     "style": "draft_entry",
-                    "text": "当前信息已基本收敛，可以手动生成研究草案。",
+                    "text": "当前信息已基本收敛，可以手动生成研究方案。",
                     "items": [],
                 }
             )
@@ -154,9 +154,9 @@ class ChatService:
             sections.append(
                 {
                     "key": "draft",
-                    "title": "研究草案",
+                    "title": "研究方案",
                     "style": "info",
-                    "text": draft.get("title") or draft.get("topic") or "已生成研究草案",
+                    "text": draft.get("title") or draft.get("topic") or "已生成研究方案",
                     "items": draft.get("next_actions", [])[:4],
                 }
             )
@@ -214,16 +214,16 @@ class ChatService:
             sections.append(
                 {
                     "key": "draft",
-                    "title": "研究草案",
+                    "title": "研究方案",
                     "style": "info",
-                    "text": draft.get("title") or draft.get("topic") or "已生成研究草案",
+                    "text": draft.get("title") or draft.get("topic") or "已生成研究方案",
                     "items": draft.get("next_actions", [])[:4],
                 }
             )
         updated = memory_store.upsert_guidance_snapshot(
             conversation_id,
             status="draft_ready",
-            headline=str(guidance.get("headline") or "已生成研究草案"),
+            headline=str(guidance.get("headline") or "已生成研究方案"),
             sections=sections,
             draft=draft,
             source_message_id=str(guidance.get("source_message_id") or ""),
@@ -269,9 +269,11 @@ class ChatService:
         )
         yield encode_sse("ping", {"ts": now_iso()})
 
+        fallback_response_text = ""
         try:
             async for part in self.graph.astream(
                 {
+                    "user_id": user_id,
                     "conversation_id": conversation_id,
                     "user_input": content,
                     "recent_messages": self._build_recent_window(conversation_id, exclude_last=1),
@@ -279,6 +281,11 @@ class ChatService:
                 },
                 stream_mode=["messages", "updates", "custom"],
             ):
+                normalized_part = normalize_chat_stream_part(part)
+                if normalized_part.get("type") == "updates":
+                    for node_update in normalized_part.get("data", {}).values():
+                        if isinstance(node_update, dict) and node_update.get("response_text"):
+                            fallback_response_text = str(node_update["response_text"])
                 for event_name, payload in translate_chat_stream_part(part):
                     if event_name == "message.delta":
                         accumulated += payload["delta"]
@@ -301,6 +308,16 @@ class ChatService:
                 },
             )
             return
+
+        if not accumulated.strip() and fallback_response_text.strip():
+            accumulated = fallback_response_text
+            yield encode_sse(
+                "message.delta",
+                {
+                    "delta": fallback_response_text,
+                    "accumulated": fallback_response_text,
+                },
+            )
 
         final_text = accumulated.strip()
         if not final_text:

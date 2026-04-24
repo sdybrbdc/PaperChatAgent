@@ -23,7 +23,6 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expi
 
 
 LEGACY_DROP_ORDER = [
-    "paperchat_research_tasks",
     "paperchat_knowledge_files",
     "paperchat_chat_sessions",
     "paperchat_workspaces",
@@ -69,6 +68,89 @@ CHAT_SCHEMA_REQUIRED_COLUMNS: dict[str, set[str]] = {
         "conversation_id",
         "event_type",
         "payload_json",
+        "created_at",
+    },
+    "paperchat_agent_workflows": {
+        "id",
+        "slug",
+        "name",
+        "description",
+        "source_type",
+        "status",
+        "version",
+        "definition_json",
+        "created_at",
+        "updated_at",
+    },
+    "paperchat_agent_node_config_overrides": {
+        "id",
+        "user_id",
+        "workflow_id",
+        "node_id",
+        "executor_key",
+        "fallback_executor_key",
+        "model_slot",
+        "config_json",
+        "created_at",
+        "updated_at",
+    },
+    "paperchat_research_tasks": {
+        "id",
+        "user_id",
+        "conversation_id",
+        "workflow_id",
+        "title",
+        "status",
+        "current_node",
+        "progress",
+        "summary",
+        "failed_reason",
+        "created_at",
+        "updated_at",
+        "completed_at",
+    },
+    "paperchat_workflow_runs": {
+        "id",
+        "task_id",
+        "user_id",
+        "conversation_id",
+        "workflow_id",
+        "status",
+        "current_node",
+        "input_json",
+        "output_json",
+        "checkpoint_json",
+        "error_json",
+        "started_at",
+        "completed_at",
+        "created_at",
+        "updated_at",
+    },
+    "paperchat_workflow_node_runs": {
+        "id",
+        "workflow_run_id",
+        "node_id",
+        "parent_node_id",
+        "title",
+        "status",
+        "detail",
+        "progress",
+        "input_json",
+        "output_json",
+        "metadata_json",
+        "error_text",
+        "sort_order",
+        "started_at",
+        "completed_at",
+    },
+    "paperchat_task_artifacts": {
+        "id",
+        "task_id",
+        "workflow_run_id",
+        "artifact_type",
+        "title",
+        "content_text",
+        "metadata_json",
         "created_at",
     },
 }
@@ -136,14 +218,24 @@ def drop_legacy_tables() -> None:
 
 def init_database() -> None:
     from paperchat.database.models.tables import (  # noqa: F401
+        PaperChatAgentNodeConfigOverrideRecord,
+        PaperChatAgentWorkflowRecord,
         PaperChatConversationGuidanceSnapshotRecord,
         PaperChatConversationRealtimeEventRecord,
         PaperChatConversationRecord,
         PaperChatMessageRecord,
+        PaperChatResearchTaskRecord,
+        PaperChatTaskArtifactRecord,
         PaperChatUserRecord,
         PaperChatUserSessionRecord,
+        PaperChatWorkflowNodeRunRecord,
+        PaperChatWorkflowRunRecord,
     )
 
     ensure_database_exists()
     drop_legacy_tables()
     Base.metadata.create_all(bind=engine, checkfirst=True)
+
+    from paperchat.services.agents import agent_service
+
+    agent_service.ensure_builtin_workflows()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -95,3 +95,124 @@ class PaperChatConversationRealtimeEventRecord(Base):
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, index=True)
+
+
+class PaperChatAgentWorkflowRecord(Base):
+    __tablename__ = "paperchat_agent_workflows"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="builtin")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0.0")
+    definition_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class PaperChatAgentNodeConfigOverrideRecord(Base):
+    __tablename__ = "paperchat_agent_node_config_overrides"
+    __table_args__ = (
+        UniqueConstraint("user_id", "workflow_id", "node_id", name="uk_paperchat_agent_node_config_user_workflow_node"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
+    workflow_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_agent_workflows.id"), nullable=False, index=True
+    )
+    node_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    executor_key: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    fallback_executor_key: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    model_slot: Mapped[str] = mapped_column(String(64), nullable=False, default="conversation_model")
+    config_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class PaperChatResearchTaskRecord(Base):
+    __tablename__ = "paperchat_research_tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
+    conversation_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("paperchat_conversations.id"), nullable=True, index=True
+    )
+    workflow_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_agent_workflows.id"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    current_node: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    failed_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PaperChatWorkflowRunRecord(Base):
+    __tablename__ = "paperchat_workflow_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_research_tasks.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
+    conversation_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("paperchat_conversations.id"), nullable=True, index=True
+    )
+    workflow_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_agent_workflows.id"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    current_node: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    input_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    output_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    checkpoint_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    error_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class PaperChatWorkflowNodeRunRecord(Base):
+    __tablename__ = "paperchat_workflow_node_runs"
+    __table_args__ = (
+        UniqueConstraint("workflow_run_id", "node_id", name="uk_paperchat_workflow_node_run"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    workflow_run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_workflow_runs.id"), nullable=False, index=True
+    )
+    node_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    parent_node_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    input_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    output_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    error_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PaperChatTaskArtifactRecord(Base):
+    __tablename__ = "paperchat_task_artifacts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_research_tasks.id"), nullable=False, index=True)
+    workflow_run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_workflow_runs.id"), nullable=False, index=True
+    )
+    artifact_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)

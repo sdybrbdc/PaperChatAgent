@@ -17,7 +17,7 @@ export interface ChatSessionDTO {
 export interface MessageDTO {
   id: string
   role: 'user' | 'assistant' | 'system'
-  messageType: 'chat'
+  messageType: 'chat' | 'task_event' | 'tool_result' | 'system_notice'
   content: string
   metadata?: Record<string, unknown>
   citations?: Array<Record<string, unknown>>

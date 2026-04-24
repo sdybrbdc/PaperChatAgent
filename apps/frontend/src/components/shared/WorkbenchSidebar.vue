@@ -17,7 +17,7 @@ const navItems = [
   { key: 'knowledge', label: '知识库', disabled: true },
   { key: 'mcp', label: 'MCP 服务', disabled: true },
   { key: 'skills', label: 'Skills', disabled: true },
-  { key: 'agents', label: '智能体', disabled: true },
+  { key: 'agents', label: '智能体', to: '/agents', disabled: false },
   { key: 'models', label: '模型', disabled: true },
   { key: 'tasks', label: '后台任务', disabled: true },
   { key: 'dashboard', label: '数据看板', disabled: true },

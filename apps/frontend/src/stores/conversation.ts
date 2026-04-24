@@ -211,7 +211,7 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       guidance.value = await generateConversationDraft(currentConversation.value.id)
     } catch (error) {
-      guidanceError.value = error instanceof Error ? error.message : '研究草案生成失败'
+      guidanceError.value = error instanceof Error ? error.message : '研究方案生成失败'
     } finally {
       isGeneratingDraft.value = false
     }

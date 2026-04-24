@@ -2,6 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginPage from '../pages/login/LoginPage.vue'
 import RegisterPage from '../pages/register/RegisterPage.vue'
 import ChatPage from '../pages/chat/ChatPage.vue'
+import AgentDetailPage from '../pages/agents/AgentDetailPage.vue'
+import AgentRunPage from '../pages/agents/AgentRunPage.vue'
+import AgentsListPage from '../pages/agents/AgentsListPage.vue'
 import AuthLayout from '../layouts/AuthLayout.vue'
 import WorkbenchLayout from '../layouts/WorkbenchLayout.vue'
 import { useAuthStore } from '../stores/auth'
@@ -28,6 +31,9 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/chat' },
         { path: 'chat', name: 'chat', component: ChatPage, meta: { navKey: 'chat' } },
+        { path: 'agents', name: 'agents', component: AgentsListPage, meta: { navKey: 'agents' } },
+        { path: 'agents/runs/:runId', name: 'agent-run', component: AgentRunPage, meta: { navKey: 'agents' } },
+        { path: 'agents/:workflowId', name: 'agent-detail', component: AgentDetailPage, meta: { navKey: 'agents' } },
       ],
     },
   ],
