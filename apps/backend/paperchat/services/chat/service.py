@@ -8,14 +8,41 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from paperchat.api.errcode import AppError
 from paperchat.api.responses.sse import encode_sse, now_iso
 from paperchat.database.dao import memory_store
+from paperchat.prompts import CHAT_CONTEXT_LOADING_MESSAGE, CHAT_READY_MESSAGE, build_chat_system_prompt
+from paperchat.providers import get_conversation_chat_model
+from paperchat.services.chat.memory import chat_memory_service
 from paperchat.services.stream import normalize_chat_stream_part, translate_chat_stream_part
-from paperchat.workflows.chat_graph import build_chat_graph
+from paperchat.workflows.chat_graph import build_chat_graph, should_start_research_tool
 from paperchat.workflows.guidance_graph import generate_guidance_analysis, generate_research_draft
 
 
 class ChatService:
     def __init__(self) -> None:
         self.graph = build_chat_graph()
+
+    @staticmethod
+    def _chunk_to_text(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                    continue
+                if isinstance(item, dict):
+                    text = item.get("text") or item.get("content") or ""
+                    if text:
+                        parts.append(str(text))
+                    continue
+                text = getattr(item, "text", "") or getattr(item, "content", "")
+                if text:
+                    parts.append(str(text))
+            return "".join(parts)
+        text = getattr(content, "text", "") or getattr(content, "content", "")
+        if text:
+            return str(text)
+        return str(content) if content else ""
 
     def _require_conversation(self, user_id: str, conversation_id: str):
         conversation = memory_store.get_conversation(conversation_id)
@@ -246,7 +273,7 @@ class ChatService:
     ) -> AsyncIterator[str]:
         conversation = self._require_conversation(user_id, conversation_id)
 
-        memory_store.add_message(
+        user_message = memory_store.add_message(
             conversation_id=conversation_id,
             user_id=user_id,
             role="user",
@@ -269,55 +296,150 @@ class ChatService:
         )
         yield encode_sse("ping", {"ts": now_iso()})
 
-        fallback_response_text = ""
+        conversation_memory = None
+        user_memories: list[dict[str, Any]] = []
         try:
-            async for part in self.graph.astream(
-                {
-                    "user_id": user_id,
-                    "conversation_id": conversation_id,
-                    "user_input": content,
-                    "recent_messages": self._build_recent_window(conversation_id, exclude_last=1),
-                    "response_text": "",
-                },
-                stream_mode=["messages", "updates", "custom"],
-            ):
-                normalized_part = normalize_chat_stream_part(part)
-                if normalized_part.get("type") == "updates":
-                    for node_update in normalized_part.get("data", {}).values():
-                        if isinstance(node_update, dict) and node_update.get("response_text"):
-                            fallback_response_text = str(node_update["response_text"])
-                for event_name, payload in translate_chat_stream_part(part):
-                    if event_name == "message.delta":
-                        accumulated += payload["delta"]
-                        payload = {
-                            "delta": payload["delta"],
-                            "accumulated": accumulated,
-                        }
-                    yield encode_sse(event_name, payload)
+            memory_context = await chat_memory_service.build_chat_memory_context(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                user_input=content,
+                conversation_title=conversation.title,
+            )
+            conversation_memory = memory_context.get("conversation_memory")
+            user_memories = list(memory_context.get("user_memories") or [])
         except Exception as exc:
             memory_store.append_realtime_event(
                 conversation_id=conversation_id,
-                event_type="message_failed",
-                payload={"message": str(exc)},
+                event_type="memory_context_failed",
+                payload={"message": str(exc), "user_message_id": user_message.id},
             )
-            yield encode_sse(
-                "message.failed",
-                {
-                    "code": "CHAT_STREAM_FAILED",
-                    "message": str(exc),
-                },
-            )
-            return
 
-        if not accumulated.strip() and fallback_response_text.strip():
-            accumulated = fallback_response_text
+        if should_start_research_tool(content):
+            fallback_response_text = ""
+            try:
+                async for part in self.graph.astream(
+                    {
+                        "user_id": user_id,
+                        "conversation_id": conversation_id,
+                        "user_input": content,
+                        "recent_messages": self._build_recent_window(conversation_id, limit=8, exclude_last=1),
+                        "conversation_memory": conversation_memory,
+                        "user_memories": user_memories,
+                        "response_text": "",
+                    },
+                    stream_mode=["messages", "updates", "custom"],
+                ):
+                    normalized_part = normalize_chat_stream_part(part)
+                    if normalized_part.get("type") == "updates":
+                        for node_update in normalized_part.get("data", {}).values():
+                            if isinstance(node_update, dict) and node_update.get("response_text"):
+                                fallback_response_text = str(node_update["response_text"])
+                    for event_name, payload in translate_chat_stream_part(part):
+                        if event_name == "message.delta":
+                            accumulated += payload["delta"]
+                            payload = {
+                                "delta": payload["delta"],
+                                "accumulated": accumulated,
+                            }
+                        yield encode_sse(event_name, payload)
+            except Exception as exc:
+                memory_store.append_realtime_event(
+                    conversation_id=conversation_id,
+                    event_type="message_failed",
+                    payload={"message": str(exc)},
+                )
+                yield encode_sse(
+                    "message.failed",
+                    {
+                        "code": "CHAT_STREAM_FAILED",
+                        "message": str(exc),
+                    },
+                )
+                return
+
+            if not accumulated.strip() and fallback_response_text.strip():
+                accumulated = fallback_response_text
+                yield encode_sse(
+                    "message.delta",
+                    {
+                        "delta": fallback_response_text,
+                        "accumulated": fallback_response_text,
+                    },
+                )
+        else:
+            if conversation_memory and conversation_memory.get("summary"):
+                yield encode_sse("message.info", {"detail": "已载入短期会话记忆摘要"})
+            if user_memories:
+                yield encode_sse("message.info", {"detail": f"已载入 {len(user_memories)} 条用户长期记忆"})
             yield encode_sse(
-                "message.delta",
+                "message.progress",
                 {
-                    "delta": fallback_response_text,
-                    "accumulated": fallback_response_text,
+                    "stage": "load_memory",
+                    "node": "load_memory",
+                    "status": "completed",
+                    "detail": "记忆上下文已加载",
                 },
             )
+            yield encode_sse("message.info", {"detail": CHAT_CONTEXT_LOADING_MESSAGE})
+            yield encode_sse("message.info", {"detail": CHAT_READY_MESSAGE})
+            yield encode_sse(
+                "message.progress",
+                {
+                    "stage": "load_context",
+                    "node": "load_context",
+                    "status": "completed",
+                    "detail": "会话上下文已加载",
+                },
+            )
+
+            model = get_conversation_chat_model()
+            try:
+                async for response_chunk in model.astream(
+                    [
+                        SystemMessage(
+                            content=build_chat_system_prompt(
+                                conversation_memory=conversation_memory,
+                                user_memories=user_memories,
+                            )
+                        ),
+                        *self._build_recent_window(conversation_id, limit=8, exclude_last=1),
+                        HumanMessage(content=content),
+                    ]
+                ):
+                    delta = self._chunk_to_text(getattr(response_chunk, "content", ""))
+                    if not delta:
+                        continue
+                    accumulated += delta
+                    yield encode_sse(
+                        "message.delta",
+                        {
+                            "delta": delta,
+                            "accumulated": accumulated,
+                        },
+                    )
+                yield encode_sse(
+                    "message.progress",
+                    {
+                        "stage": "call_model",
+                        "node": "call_model",
+                        "status": "completed",
+                        "detail": "模型生成阶段已完成",
+                    },
+                )
+            except Exception as exc:
+                memory_store.append_realtime_event(
+                    conversation_id=conversation_id,
+                    event_type="message_failed",
+                    payload={"message": str(exc)},
+                )
+                yield encode_sse(
+                    "message.failed",
+                    {
+                        "code": "CHAT_STREAM_FAILED",
+                        "message": str(exc),
+                    },
+                )
+                return
 
         final_text = accumulated.strip()
         if not final_text:
@@ -382,6 +504,35 @@ class ChatService:
                 payload={"message": str(exc)},
             )
             yield encode_sse("message.info", {"detail": f"专业提示区更新失败：{exc}"})
+
+        current_conversation = memory_store.get_conversation(conversation_id) or conversation
+        try:
+            stored_memories = await chat_memory_service.remember_latest_turn(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                conversation_title=current_conversation.title,
+                source_message_id=assistant_message.id,
+            )
+            refreshed_summary = await chat_memory_service.maybe_refresh_conversation_summary(
+                conversation_id=conversation_id,
+                conversation_title=current_conversation.title,
+                source_message_id=assistant_message.id,
+            )
+            memory_store.append_realtime_event(
+                conversation_id=conversation_id,
+                event_type="memory_updated",
+                payload={
+                    "stored_count": len(stored_memories),
+                    "has_summary": bool(refreshed_summary and refreshed_summary.get("summary")),
+                    "source_message_id": assistant_message.id,
+                },
+            )
+        except Exception as exc:
+            memory_store.append_realtime_event(
+                conversation_id=conversation_id,
+                event_type="memory_failed",
+                payload={"message": str(exc), "source_message_id": assistant_message.id},
+            )
 
 
 chat_service = ChatService()

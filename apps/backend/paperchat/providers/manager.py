@@ -17,6 +17,10 @@ from paperchat.settings import ModelEndpointSettings, get_settings
 ChatSlot = Literal["conversation_model", "guidance_model", "tool_call_model", "reasoning_model", "qwen_vl"]
 ENV_PLACEHOLDER_RE = re.compile(r"^\$\{?[A-Z0-9_]+\}?$")
 _MODEL_SLOT_OVERRIDES: ContextVar[dict[str, str]] = ContextVar("paperchat_model_slot_overrides", default={})
+SDK_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+)
 
 
 def _is_missing_value(value: str) -> bool:
@@ -65,6 +69,13 @@ def _get_chat_slot_config(slot: ChatSlot) -> ModelEndpointSettings:
     return _require_endpoint(effective_slot, config)
 
 
+def _sdk_default_headers(config: ModelEndpointSettings) -> dict[str, str] | None:
+    # Some OpenAI-compatible gateways block the default OpenAI/Python user agent.
+    if "aizhiwen.top" in config.base_url:
+        return {"User-Agent": SDK_USER_AGENT}
+    return None
+
+
 def _build_openai_compatible_chat_client(slot: ChatSlot, *, temperature: float = 0) -> BaseChatModel:
     config = _get_chat_slot_config(slot)
     return ChatOpenAI(
@@ -72,6 +83,7 @@ def _build_openai_compatible_chat_client(slot: ChatSlot, *, temperature: float =
         base_url=config.base_url,
         model=config.model_name,
         temperature=temperature,
+        default_headers=_sdk_default_headers(config),
     )
 
 
@@ -102,6 +114,7 @@ def get_embedding_client() -> OpenAIEmbeddings:
         api_key=config.api_key,
         base_url=config.base_url,
         model=config.model_name,
+        default_headers=_sdk_default_headers(config),
     )
 
 

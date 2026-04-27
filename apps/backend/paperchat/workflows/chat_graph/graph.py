@@ -23,13 +23,15 @@ class ChatGraphState(TypedDict):
     conversation_id: str
     user_input: str
     recent_messages: list[BaseMessage]
+    conversation_memory: dict[str, Any] | None
+    user_memories: list[dict[str, Any]]
     response_text: str
 
 
 RESEARCH_TRIGGER_WORDS = ("调用智能研究助手", "智能研究助手", "开始研究", "深入研究", "生成调研报告", "生成研究报告", "执行研究方案")
 
 
-def _should_start_research_tool(user_input: str) -> bool:
+def should_start_research_tool(user_input: str) -> bool:
     return any(keyword in user_input for keyword in RESEARCH_TRIGGER_WORDS)
 
 
@@ -45,8 +47,42 @@ def _last_agent_message_content(result: dict[str, Any]) -> str:
     return str(content)
 
 
+def _content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content") or ""
+                if text:
+                    parts.append(str(text))
+                continue
+            text = getattr(item, "text", "") or getattr(item, "content", "")
+            if text:
+                parts.append(str(text))
+        return "".join(parts)
+    text = getattr(content, "text", "") or getattr(content, "content", "")
+    if text:
+        return str(text)
+    return str(content) if content else ""
+
+
 def build_chat_graph():
     model = get_conversation_chat_model()
+
+    async def load_memory(state: ChatGraphState):
+        writer = get_stream_writer()
+        conversation_memory = state.get("conversation_memory") or {}
+        user_memories = state.get("user_memories") or []
+        if conversation_memory.get("summary"):
+            writer({"kind": "info", "detail": "已载入短期会话记忆摘要"})
+        if user_memories:
+            writer({"kind": "info", "detail": f"已载入 {len(user_memories)} 条用户长期记忆"})
+        return {}
 
     async def load_context(_state: ChatGraphState):
         writer = get_stream_writer()
@@ -55,6 +91,12 @@ def build_chat_graph():
         return {}
 
     async def call_model(state: ChatGraphState):
+        writer = get_stream_writer()
+        system_prompt = build_chat_system_prompt(
+            conversation_memory=state.get("conversation_memory"),
+            user_memories=state.get("user_memories") or [],
+        )
+
         async def start_research(topic: str, max_papers: int = 6) -> str:
             payload = await agent_service.create_smart_research_run_from_chat(
                 user_id=state["user_id"],
@@ -79,12 +121,7 @@ def build_chat_graph():
             agent = create_agent(
                 model,
                 tools=[start_smart_research_assistant],
-                system_prompt=(
-                    build_chat_system_prompt()
-                    + "\n\n当用户明确要求深入研究、生成调研/研究报告、执行研究方案，或点名调用智能研究助手时，"
-                    "调用 start_smart_research_assistant。该工具会创建后台长任务，工具返回任务入口后你需要把入口转述给用户。"
-                    "普通问答、方向澄清和闲聊不要调用工具。"
-                ),
+                system_prompt=system_prompt,
             )
             try:
                 result = await agent.ainvoke(
@@ -97,19 +134,37 @@ def build_chat_graph():
                 )
                 response_text = _last_agent_message_content(result).strip()
                 if response_text:
-                    if _should_start_research_tool(state["user_input"]) and "/agents/runs/" not in response_text:
+                    if should_start_research_tool(state["user_input"]) and "/agents/runs/" not in response_text:
                         return {"response_text": await start_research(topic=state["user_input"])}
                     return {"response_text": response_text}
             except Exception:
-                if _should_start_research_tool(state["user_input"]):
+                if should_start_research_tool(state["user_input"]):
                     return {"response_text": await start_research(topic=state["user_input"])}
 
-        if _should_start_research_tool(state["user_input"]):
+        if should_start_research_tool(state["user_input"]):
             return {"response_text": await start_research(topic=state["user_input"])}
+
+        chunks: list[str] = []
+        async for response_chunk in model.astream(
+            [
+                SystemMessage(content=system_prompt),
+                *state.get("recent_messages", []),
+                HumanMessage(content=state["user_input"]),
+            ]
+        ):
+            delta = _content_to_text(getattr(response_chunk, "content", ""))
+            if not delta:
+                continue
+            chunks.append(delta)
+            writer({"kind": "delta", "delta": delta})
+
+        response_text = "".join(chunks)
+        if response_text.strip():
+            return {"response_text": response_text}
 
         response = await model.ainvoke(
             [
-                SystemMessage(content=build_chat_system_prompt()),
+                SystemMessage(content=system_prompt),
                 *state.get("recent_messages", []),
                 HumanMessage(content=state["user_input"]),
             ]
@@ -117,9 +172,11 @@ def build_chat_graph():
         return {"response_text": response.content}
 
     graph = StateGraph(ChatGraphState)
+    graph.add_node("load_memory", load_memory)
     graph.add_node("load_context", load_context)
     graph.add_node("call_model", call_model)
-    graph.add_edge(START, "load_context")
+    graph.add_edge(START, "load_memory")
+    graph.add_edge("load_memory", "load_context")
     graph.add_edge("load_context", "call_model")
     graph.add_edge("call_model", END)
     return graph.compile()

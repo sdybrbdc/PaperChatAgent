@@ -43,7 +43,9 @@ def translate_chat_stream_part(part: tuple | dict) -> list[tuple[str, dict]]:
 
     if part_type == "custom":
         payload = part["data"]
-        if isinstance(payload, dict) and payload.get("kind") == "tool":
+        if isinstance(payload, dict) and payload.get("kind") == "delta":
+            translated.append(("message.delta", {"delta": str(payload.get("delta") or "")}))
+        elif isinstance(payload, dict) and payload.get("kind") == "tool":
             translated.append(
                 (
                     "message.tool",

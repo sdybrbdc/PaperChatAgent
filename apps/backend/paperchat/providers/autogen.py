@@ -3,7 +3,7 @@ from __future__ import annotations
 from autogen_core.models import ModelInfo
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
-from paperchat.providers.manager import ChatSlot, _get_chat_slot_config
+from paperchat.providers.manager import ChatSlot, _get_chat_slot_config, _sdk_default_headers
 
 
 def _infer_model_family(model_name: str) -> str:
@@ -39,6 +39,7 @@ def get_autogen_model_client(
         base_url=config.base_url,
         model_info=model_info,
         parallel_tool_calls=False,
+        default_headers=_sdk_default_headers(config),
     )
 
 
