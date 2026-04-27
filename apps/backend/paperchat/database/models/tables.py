@@ -97,6 +97,46 @@ class PaperChatConversationRealtimeEventRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, index=True)
 
 
+class PaperChatConversationMemoryRecord(Base):
+    __tablename__ = "paperchat_conversation_memories"
+
+    conversation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("paperchat_conversations.id"), primary_key=True
+    )
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    key_points_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    user_preferences_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    open_questions_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    compressed_message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class PaperChatUserMemoryRecord(Base):
+    __tablename__ = "paperchat_user_memories"
+    __table_args__ = (
+        UniqueConstraint("user_id", "memory_fingerprint", name="uk_paperchat_user_memory_fingerprint"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("paperchat_users.id"), nullable=False, index=True)
+    memory_type: Mapped[str] = mapped_column(String(32), nullable=False, default="preference")
+    title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tags_json: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    confidence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    memory_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_conversation_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("paperchat_conversations.id"), nullable=True, index=True
+    )
+    source_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_observed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class PaperChatAgentWorkflowRecord(Base):
     __tablename__ = "paperchat_agent_workflows"
 

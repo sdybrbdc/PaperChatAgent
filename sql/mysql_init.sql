@@ -13,6 +13,8 @@ DROP TABLE IF EXISTS `paperchat_workflow_runs`;
 DROP TABLE IF EXISTS `paperchat_research_tasks`;
 DROP TABLE IF EXISTS `paperchat_agent_node_config_overrides`;
 DROP TABLE IF EXISTS `paperchat_agent_workflows`;
+DROP TABLE IF EXISTS `paperchat_user_memories`;
+DROP TABLE IF EXISTS `paperchat_conversation_memories`;
 DROP TABLE IF EXISTS `paperchat_conversation_realtime_events`;
 DROP TABLE IF EXISTS `paperchat_conversation_guidance_snapshots`;
 DROP TABLE IF EXISTS `paperchat_messages`;
@@ -121,6 +123,50 @@ CREATE TABLE IF NOT EXISTS `paperchat_conversation_realtime_events` (
   CONSTRAINT `fk_paperchat_realtime_events_conversation_id`
     FOREIGN KEY (`conversation_id`) REFERENCES `paperchat_conversations` (`id`)
     ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `paperchat_conversation_memories` (
+  `conversation_id` VARCHAR(36) NOT NULL,
+  `summary_text` TEXT NOT NULL,
+  `key_points_json` JSON NOT NULL,
+  `user_preferences_json` JSON NOT NULL,
+  `open_questions_json` JSON NOT NULL,
+  `compressed_message_count` INT NOT NULL DEFAULT 0,
+  `source_message_id` VARCHAR(36) DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`conversation_id`),
+  CONSTRAINT `fk_paperchat_conversation_memories_conversation_id`
+    FOREIGN KEY (`conversation_id`) REFERENCES `paperchat_conversations` (`id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `paperchat_user_memories` (
+  `id` VARCHAR(36) NOT NULL,
+  `user_id` VARCHAR(36) NOT NULL,
+  `memory_type` VARCHAR(32) NOT NULL DEFAULT 'preference',
+  `title` VARCHAR(255) NOT NULL DEFAULT '',
+  `content` TEXT NOT NULL,
+  `tags_json` JSON NOT NULL,
+  `confidence` INT NOT NULL DEFAULT 0,
+  `memory_fingerprint` VARCHAR(64) NOT NULL,
+  `source_conversation_id` VARCHAR(36) DEFAULT NULL,
+  `source_message_id` VARCHAR(36) DEFAULT NULL,
+  `active` BOOLEAN NOT NULL DEFAULT TRUE,
+  `last_observed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_paperchat_user_memory_fingerprint` (`user_id`, `memory_fingerprint`),
+  KEY `idx_paperchat_user_memories_user_id` (`user_id`),
+  KEY `idx_paperchat_user_memories_source_conversation_id` (`source_conversation_id`),
+  KEY `idx_paperchat_user_memories_last_observed_at` (`last_observed_at`),
+  CONSTRAINT `fk_paperchat_user_memories_user_id`
+    FOREIGN KEY (`user_id`) REFERENCES `paperchat_users` (`id`)
+    ON DELETE CASCADE,
+  CONSTRAINT `fk_paperchat_user_memories_source_conversation_id`
+    FOREIGN KEY (`source_conversation_id`) REFERENCES `paperchat_conversations` (`id`)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `paperchat_agent_workflows` (

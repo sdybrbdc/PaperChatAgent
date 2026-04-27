@@ -8,9 +8,11 @@ from sqlalchemy import desc, select
 
 from paperchat.database.models.tables import (
     PaperChatConversationGuidanceSnapshotRecord,
+    PaperChatConversationMemoryRecord,
     PaperChatConversationRealtimeEventRecord,
     PaperChatConversationRecord,
     PaperChatMessageRecord,
+    PaperChatUserMemoryRecord,
     PaperChatUserRecord,
     PaperChatUserSessionRecord,
 )
@@ -203,6 +205,10 @@ class SQLBackedStore:
         with db_session() as session:
             return session.get(PaperChatConversationGuidanceSnapshotRecord, conversation_id)
 
+    def get_conversation_memory(self, conversation_id: str):
+        with db_session() as session:
+            return session.get(PaperChatConversationMemoryRecord, conversation_id)
+
     def upsert_guidance_snapshot(
         self,
         conversation_id: str,
@@ -226,6 +232,84 @@ class SQLBackedStore:
             snapshot.updated_at = utcnow()
             session.flush()
             return snapshot
+
+    def upsert_conversation_memory(
+        self,
+        conversation_id: str,
+        *,
+        summary_text: str,
+        key_points: list[str],
+        user_preferences: list[str],
+        open_questions: list[str],
+        compressed_message_count: int,
+        source_message_id: str | None = None,
+    ):
+        with db_session() as session:
+            record = session.get(PaperChatConversationMemoryRecord, conversation_id)
+            if record is None:
+                record = PaperChatConversationMemoryRecord(conversation_id=conversation_id)
+                session.add(record)
+            record.summary_text = summary_text
+            record.key_points_json = key_points
+            record.user_preferences_json = user_preferences
+            record.open_questions_json = open_questions
+            record.compressed_message_count = compressed_message_count
+            record.source_message_id = source_message_id
+            record.updated_at = utcnow()
+            session.flush()
+            return record
+
+    def list_user_memories(self, user_id: str):
+        with db_session() as session:
+            return list(
+                session.scalars(
+                    select(PaperChatUserMemoryRecord)
+                    .where(PaperChatUserMemoryRecord.user_id == user_id)
+                    .order_by(
+                        desc(PaperChatUserMemoryRecord.last_observed_at),
+                        desc(PaperChatUserMemoryRecord.updated_at),
+                    )
+                )
+            )
+
+    def upsert_user_memory(
+        self,
+        *,
+        user_id: str,
+        memory_type: str,
+        title: str,
+        content: str,
+        tags: list[str],
+        confidence: int,
+        memory_fingerprint: str,
+        source_conversation_id: str | None,
+        source_message_id: str | None,
+    ):
+        with db_session() as session:
+            record = session.scalar(
+                select(PaperChatUserMemoryRecord).where(
+                    PaperChatUserMemoryRecord.user_id == user_id,
+                    PaperChatUserMemoryRecord.memory_fingerprint == memory_fingerprint,
+                )
+            )
+            if record is None:
+                record = PaperChatUserMemoryRecord(
+                    user_id=user_id,
+                    memory_fingerprint=memory_fingerprint,
+                )
+                session.add(record)
+            record.memory_type = memory_type
+            record.title = title
+            record.content = content
+            record.tags_json = tags
+            record.confidence = confidence
+            record.source_conversation_id = source_conversation_id
+            record.source_message_id = source_message_id
+            record.active = True
+            record.last_observed_at = utcnow()
+            record.updated_at = utcnow()
+            session.flush()
+            return record
 
     def update_guidance_draft(self, conversation_id: str, *, draft: dict[str, Any], status: str = "draft_ready"):
         with db_session() as session:
@@ -293,6 +377,34 @@ class SQLBackedStore:
             "draft": snapshot.draft_json,
             "updated_at": snapshot.updated_at.isoformat() if snapshot.updated_at else None,
             "source_message_id": snapshot.source_message_id,
+        }
+
+    def as_conversation_memory_payload(self, record) -> dict[str, Any]:
+        return {
+            "summary": record.summary_text,
+            "key_points": record.key_points_json or [],
+            "user_preferences": record.user_preferences_json or [],
+            "open_questions": record.open_questions_json or [],
+            "compressed_message_count": record.compressed_message_count,
+            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+            "source_message_id": record.source_message_id,
+        }
+
+    def as_user_memory_payload(self, record) -> dict[str, Any]:
+        return {
+            "id": record.id,
+            "user_id": record.user_id,
+            "memory_type": record.memory_type,
+            "title": record.title,
+            "content": record.content,
+            "tags": record.tags_json or [],
+            "confidence": record.confidence,
+            "source_conversation_id": record.source_conversation_id,
+            "source_message_id": record.source_message_id,
+            "active": record.active,
+            "last_observed_at": record.last_observed_at.isoformat() if record.last_observed_at else None,
+            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
         }
 
 
