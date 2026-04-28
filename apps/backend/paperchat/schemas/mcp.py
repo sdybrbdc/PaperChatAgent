@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-McpTransportType = Literal["stdio", "sse", "http", "websocket"]
+McpTransportType = Literal["stdio", "sse", "http", "streamable_http", "websocket"]
 McpServiceStatus = Literal["enabled", "disabled"]
 McpHealthStatus = Literal["unknown", "healthy", "unhealthy"]
 McpToolStatus = Literal["active", "disabled"]
@@ -94,3 +94,7 @@ class McpRefreshToolsPayload(BaseModel):
     refreshed: bool
     tools: list[McpToolPayload] = Field(default_factory=list)
     message: str
+
+
+class McpToolCallRequest(BaseModel):
+    arguments: dict[str, Any] = Field(default_factory=dict)

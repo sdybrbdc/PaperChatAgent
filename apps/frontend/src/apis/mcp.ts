@@ -1,4 +1,10 @@
-import type { McpServiceCreatePayload, McpServiceDTO, McpTestResultDTO, McpToolDTO } from '../types/mcp'
+import type {
+  McpServiceCreatePayload,
+  McpServiceDTO,
+  McpTestResultDTO,
+  McpToolCallResultDTO,
+  McpToolDTO,
+} from '../types/mcp'
 import { apiClient } from '../utils/http'
 
 interface ApiEnvelope<T> {
@@ -95,6 +101,8 @@ export async function syncCcSwitchMcpServices() {
     source: record(data.source),
     created: Number(data.created ?? 0),
     updated: Number(data.updated ?? 0),
+    refreshed: Number(data.refreshed ?? 0),
+    refreshErrors: list(data.refresh_errors).map(record),
     total: Number(data.total ?? 0),
     items: list(data).map(normalizeService),
   }
@@ -108,4 +116,21 @@ export async function getMcpTools() {
 export async function testMcpService(serviceId: string) {
   const response = await apiClient.post<ApiEnvelope<unknown>>(`/mcp/services/${serviceId}/test`)
   return normalizeTestResult(response.data.data)
+}
+
+export async function callMcpTool(
+  serviceId: string,
+  toolName: string,
+  argumentsPayload: Record<string, unknown>,
+): Promise<McpToolCallResultDTO> {
+  const response = await apiClient.post<ApiEnvelope<unknown>>(`/mcp/services/${serviceId}/tools/${toolName}/call`, {
+    arguments: argumentsPayload,
+  })
+  const data = record(response.data.data)
+  return {
+    service: normalizeService(data.service),
+    toolName: String(data.tool_name ?? data.toolName ?? toolName),
+    arguments: record(data.arguments),
+    result: record(data.result),
+  }
 }

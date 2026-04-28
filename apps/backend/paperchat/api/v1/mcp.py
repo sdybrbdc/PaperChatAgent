@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 from paperchat.api.responses import APIResponse, ok
 from paperchat.auth import get_current_user
-from paperchat.schemas.mcp import McpServiceCreate, McpServiceUpdate
+from paperchat.schemas.mcp import McpServiceCreate, McpServiceUpdate, McpToolCallRequest
 from paperchat.services.mcp import mcp_service
 
 
@@ -23,7 +23,7 @@ async def list_cc_switch_mcp_services(request: Request, user=Depends(get_current
 
 @router.post("/sync/cc-switch", response_model=APIResponse)
 async def sync_cc_switch_mcp_services(request: Request, user=Depends(get_current_user)):
-    return ok(request, data=mcp_service.sync_cc_switch_services_payload(user.id))
+    return ok(request, data=await mcp_service.sync_cc_switch_services_payload(user.id))
 
 
 @router.post("/services", response_model=APIResponse)
@@ -53,7 +53,7 @@ async def delete_mcp_service(service_id: str, request: Request, user=Depends(get
 
 @router.post("/services/{service_id}/test", response_model=APIResponse)
 async def test_mcp_service(service_id: str, request: Request, user=Depends(get_current_user)):
-    return ok(request, data=mcp_service.test_service_payload(user.id, service_id))
+    return ok(request, data=await mcp_service.test_service_payload(user.id, service_id))
 
 
 @router.post("/services/{service_id}/refresh-tools", response_model=APIResponse)
@@ -64,3 +64,22 @@ async def refresh_mcp_tools(service_id: str, request: Request, user=Depends(get_
 @router.get("/tools", response_model=APIResponse)
 async def list_mcp_tools(request: Request, user=Depends(get_current_user)):
     return ok(request, data=mcp_service.list_tools_payload(user.id))
+
+
+@router.post("/services/{service_id}/tools/{tool_name}/call", response_model=APIResponse)
+async def call_mcp_tool(
+    service_id: str,
+    tool_name: str,
+    payload: McpToolCallRequest,
+    request: Request,
+    user=Depends(get_current_user),
+):
+    return ok(
+        request,
+        data=await mcp_service.call_tool_payload(
+            user_id=user.id,
+            service_id=service_id,
+            tool_name=tool_name,
+            arguments=payload.arguments,
+        ),
+    )

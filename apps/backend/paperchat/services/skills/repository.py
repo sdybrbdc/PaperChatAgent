@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import asc, select
+from sqlalchemy import asc, func, select
 
 from paperchat.database.sql import db_session
 
@@ -63,12 +63,46 @@ class SQLSkillRepository:
     def list_skills(self, user_id: str) -> list[dict[str, Any]]:
         config_record, _version_record = self._require_records()
         with db_session() as session:
-            records = session.scalars(
-                select(config_record)
-                .where(config_record.user_id == user_id, config_record.status != "deleted")
-                .order_by(asc(config_record.created_at))
+            ordered_ids = list(
+                session.scalars(
+                    select(config_record.id)
+                    .where(config_record.user_id == user_id, config_record.status != "deleted")
+                    .order_by(asc(config_record.created_at))
+                )
             )
-            return [_skill_payload(record) for record in records]
+            if not ordered_ids:
+                return []
+            records = session.scalars(
+                select(config_record).where(config_record.id.in_(ordered_ids))
+            ).all()
+            records_by_id = {record.id: record for record in records}
+            return [_skill_payload(records_by_id[record_id]) for record_id in ordered_ids if record_id in records_by_id]
+
+    def list_all_skill_keys(self, user_id: str) -> list[dict[str, str]]:
+        config_record, _version_record = self._require_records()
+        with db_session() as session:
+            rows = session.execute(
+                select(
+                    config_record.id,
+                    config_record.name,
+                    config_record.source_uri,
+                    config_record.status,
+                    func.json_unquote(func.json_extract(config_record.metadata_json, "$.content_hash")).label(
+                        "content_hash"
+                    ),
+                )
+                .where(config_record.user_id == user_id, config_record.status != "deleted")
+            ).all()
+            return [
+                {
+                    "id": str(row.id),
+                    "name": str(row.name or ""),
+                    "source_uri": str(row.source_uri or ""),
+                    "status": str(row.status or ""),
+                    "content_hash": str(row.content_hash or ""),
+                }
+                for row in rows
+            ]
 
     def create_skill(self, user_id: str, values: dict[str, Any]) -> dict[str, Any]:
         config_record, version_record = self._require_records()
@@ -138,6 +172,19 @@ class InMemorySkillRepository:
     def list_skills(self, user_id: str) -> list[dict[str, Any]]:
         return [
             dict(record)
+            for record in sorted(self._skills.values(), key=lambda item: item["created_at"] or "")
+            if record["user_id"] == user_id and record["status"] != "deleted"
+        ]
+
+    def list_all_skill_keys(self, user_id: str) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(record["id"]),
+                "name": str(record.get("name") or ""),
+                "source_uri": str(record.get("source_uri") or ""),
+                "status": str(record.get("status") or ""),
+                "content_hash": str((record.get("metadata") or {}).get("content_hash") or ""),
+            }
             for record in sorted(self._skills.values(), key=lambda item: item["created_at"] or "")
             if record["user_id"] == user_id and record["status"] != "deleted"
         ]

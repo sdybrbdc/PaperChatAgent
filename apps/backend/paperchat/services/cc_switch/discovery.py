@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 
 class CCSwitchDiscovery:
@@ -39,9 +42,10 @@ class CCSwitchDiscovery:
                 source_path = self.skills_dir / directory
             skill_md = source_path / "SKILL.md"
             markdown = self._read_text(skill_md)
+            frontmatter = self._extract_frontmatter(markdown)
             markdown_summary = self._extract_markdown_summary(markdown)
-            description = str(row.get("description") or markdown_summary or "")
-            name = str(row.get("name") or source_path.name)
+            description = str(row.get("description") or frontmatter.get("description") or markdown_summary or "")
+            name = str(frontmatter.get("name") or row.get("name") or source_path.name)
             enabled_apps = [
                 app
                 for app, key in (
@@ -191,12 +195,26 @@ class CCSwitchDiscovery:
             return ""
 
     def _extract_markdown_summary(self, markdown: str) -> str:
-        for line in markdown.splitlines():
+        body = self._strip_frontmatter(markdown)
+        for line in body.splitlines():
             clean = line.strip()
             if not clean or clean.startswith("---"):
                 continue
             return clean.lstrip("#").strip()[:500]
         return ""
+
+    def _extract_frontmatter(self, markdown: str) -> dict[str, Any]:
+        match = re.match(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", markdown, flags=re.S)
+        if not match:
+            return {}
+        try:
+            data = yaml.safe_load(match.group(1)) or {}
+        except yaml.YAMLError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _strip_frontmatter(self, markdown: str) -> str:
+        return re.sub(r"\A---\s*\n.*?\n---\s*(?:\n|\Z)", "", markdown, count=1, flags=re.S)
 
     def _content_hash(self, text: str) -> str:
         if not text:

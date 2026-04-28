@@ -19,10 +19,21 @@ export interface MessageDTO {
   role: 'user' | 'assistant' | 'system'
   messageType: 'chat' | 'task_event' | 'tool_result' | 'system_notice'
   content: string
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown> & {
+    tool_calls?: MessageToolCallDTO[]
+  }
   citations?: Array<Record<string, unknown>>
   createdAt: string
   isDraft?: boolean
+}
+
+export interface MessageToolCallDTO {
+  capability_key: string
+  kind: string
+  name: string
+  reason?: string
+  status: 'running' | 'succeeded' | 'failed'
+  summary?: string
 }
 
 export interface ResearchDraftDTO {

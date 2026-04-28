@@ -20,6 +20,8 @@ const renderedContent = computed(() =>
   DOMPurify.sanitize(markdown.render(props.message.content || ''), { USE_PROFILES: { html: true } }),
 )
 
+const toolCalls = computed(() => props.message.metadata?.tool_calls ?? [])
+
 async function handleCopy() {
   try {
     await navigator.clipboard.writeText(props.message.content)
@@ -39,6 +41,13 @@ async function handleCopy() {
       <el-button text class="message-copy-button" @click="handleCopy">
         <el-icon><CopyDocument /></el-icon>
       </el-button>
+    </div>
+    <div v-if="toolCalls.length" class="message-tool-list">
+      <div v-for="tool in toolCalls" :key="tool.capability_key" class="message-tool-item" :class="tool.status">
+        <span class="message-tool-kind">{{ tool.kind }}</span>
+        <strong>{{ tool.name || tool.capability_key }}</strong>
+        <span>{{ tool.summary || tool.reason || '能力已调用' }}</span>
+      </div>
     </div>
     <div class="message-content markdown-body" v-html="renderedContent" />
   </article>

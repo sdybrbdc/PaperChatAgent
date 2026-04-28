@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from paperchat.api.errcode import AppError
 from paperchat.schemas.mcp import McpServiceCreate, McpServiceUpdate
 from paperchat.services.cc_switch import cc_switch_discovery
 from paperchat.services.mcp.repository import InMemoryMcpRepository, SQLMcpRepository
+from paperchat.services.mcp.runtime import mcp_runtime
 
 
 class McpService:
@@ -26,11 +28,13 @@ class McpService:
             "items": [self._discovered_service_payload(item) for item in cc_switch_discovery.discover_mcp_servers()],
         }
 
-    def sync_cc_switch_services_payload(self, user_id: str) -> dict[str, Any]:
+    async def sync_cc_switch_services_payload(self, user_id: str) -> dict[str, Any]:
         discovered = cc_switch_discovery.discover_mcp_servers()
         existing = self.repository.list_services(user_id)
         created = 0
         updated = 0
+        refreshed = 0
+        refresh_errors: list[dict[str, Any]] = []
         items: list[dict[str, Any]] = []
         for item in discovered:
             match = self._find_existing_cc_switch_service(existing, item)
@@ -52,11 +56,22 @@ class McpService:
             else:
                 record = self.repository.create_service(user_id, values)
                 created += 1
+            if record.get("status") == "enabled":
+                try:
+                    refresh_payload = await self.refresh_tools_payload(user_id, record["id"])
+                    if refresh_payload.get("ok"):
+                        refreshed += 1
+                except Exception as exc:
+                    refresh_errors.append(
+                        {"service_id": record["id"], "name": record.get("name", ""), "message": str(exc)}
+                    )
             items.append(self._service_payload(record))
         return {
             "source": cc_switch_discovery.source_payload(),
             "created": created,
             "updated": updated,
+            "refreshed": refreshed,
+            "refresh_errors": refresh_errors,
             "total": len(items),
             "items": items,
         }
@@ -82,19 +97,32 @@ class McpService:
             raise AppError(status_code=404, code="MCP_SERVICE_NOT_FOUND", message="MCP 服务不存在")
         return {"deleted": True, "id": service_id}
 
-    def test_service_payload(self, user_id: str, service_id: str) -> dict[str, Any]:
+    async def test_service_payload(self, user_id: str, service_id: str) -> dict[str, Any]:
         record = self._require_service(user_id, service_id)
         ok, message = self._validate_service_config(record)
-        self.repository.set_health(user_id, service_id, "healthy" if ok else "unhealthy")
+        details: dict[str, Any] = {
+            "transport_type": record["transport_type"],
+            "external_connection": "not_attempted",
+        }
+        if not ok:
+            self.repository.set_health(user_id, service_id, "unhealthy")
+            return {"ok": False, "status": "unhealthy", "message": message, "details": details}
+        try:
+            tools = await asyncio.wait_for(mcp_runtime.list_tools(record), timeout=self._runtime_timeout(record))
+        except Exception as exc:
+            self.repository.set_health(user_id, service_id, "unhealthy")
+            return {
+                "ok": False,
+                "status": "unhealthy",
+                "message": f"MCP 服务连接失败：{exc}",
+                "details": {**details, "external_connection": "failed"},
+            }
+        self.repository.set_health(user_id, service_id, "healthy")
         return {
-            "ok": ok,
-            "status": "healthy" if ok else "unhealthy",
-            "message": message,
-            "details": {
-                "placeholder": True,
-                "transport_type": record["transport_type"],
-                "external_connection": "not_attempted",
-            },
+            "ok": True,
+            "status": "healthy",
+            "message": f"MCP 服务连接成功，发现 {len(tools)} 个工具",
+            "details": {**details, "external_connection": "connected", "tool_count": len(tools)},
         }
 
     async def refresh_tools_payload(self, user_id: str, service_id: str) -> dict[str, Any]:
@@ -103,17 +131,54 @@ class McpService:
         if not ok:
             self.repository.set_health(user_id, service_id, "unhealthy")
             return {"ok": False, "refreshed": False, "tools": [], "message": message}
+        try:
+            discovered_tools = await asyncio.wait_for(
+                mcp_runtime.list_tools(record),
+                timeout=self._runtime_timeout(record),
+            )
+        except Exception as exc:
+            self.repository.set_health(user_id, service_id, "unhealthy")
+            return {"ok": False, "refreshed": False, "tools": [], "message": f"MCP tools refresh failed: {exc}"}
         self.repository.set_health(user_id, service_id, "healthy")
-        tools = self.repository.replace_tools(user_id, service_id, [])
+        tools = self.repository.replace_tools(user_id, service_id, discovered_tools)
         return {
             "ok": True,
-            "refreshed": False,
+            "refreshed": True,
             "tools": [self._tool_payload(item) for item in tools],
-            "message": "MCP tools refresh is a placeholder until the MCP client adapter is integrated",
+            "message": f"已从 MCP 服务发现 {len(discovered_tools)} 个工具",
         }
 
     def list_tools_payload(self, user_id: str) -> dict[str, Any]:
         return {"items": [self._tool_payload(item) for item in self.repository.list_tools(user_id)]}
+
+    async def call_tool_payload(
+        self,
+        *,
+        user_id: str,
+        service_id: str,
+        tool_name: str,
+        arguments: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        record = self._require_service(user_id, service_id)
+        ok, message = self._validate_service_config(record)
+        if not ok:
+            raise AppError(status_code=400, code="MCP_SERVICE_INVALID", message=message)
+        result = await asyncio.wait_for(
+            mcp_runtime.call_tool(record, tool_name=tool_name, arguments=arguments or {}),
+            timeout=self._runtime_timeout(record),
+        )
+        if result.get("is_error"):
+            raise AppError(
+                status_code=502,
+                code="MCP_TOOL_FAILED",
+                message=str(result.get("text") or f"MCP 工具 {tool_name} 执行失败"),
+            )
+        return {
+            "service": self._service_payload(record),
+            "tool_name": tool_name,
+            "arguments": arguments or {},
+            "result": result,
+        }
 
     def _require_service(self, user_id: str, service_id: str) -> dict[str, Any]:
         record = self.repository.get_service(user_id, service_id)
@@ -139,9 +204,16 @@ class McpService:
         transport_type = record.get("transport_type", "stdio")
         if transport_type == "stdio" and not str(record.get("command") or "").strip():
             return False, "stdio MCP 服务需要配置 command"
-        if transport_type in {"sse", "http", "websocket"} and not str(record.get("endpoint_url") or "").strip():
+        if transport_type in {"sse", "http", "streamable_http", "websocket"} and not str(record.get("endpoint_url") or "").strip():
             return False, f"{transport_type} MCP 服务需要配置 endpoint_url"
-        return True, "MCP 服务配置检查通过；真实连接测试待 MCP client 集成"
+        return True, "MCP 服务配置检查通过"
+
+    def _runtime_timeout(self, record: dict[str, Any]) -> float:
+        secret_config = dict(record.get("secret_config") or {})
+        try:
+            return float(secret_config.get("timeout") or mcp_runtime.default_timeout_seconds)
+        except (TypeError, ValueError):
+            return mcp_runtime.default_timeout_seconds
 
     def _service_payload(self, record: dict[str, Any]) -> dict[str, Any]:
         return {

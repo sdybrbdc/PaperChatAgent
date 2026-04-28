@@ -21,6 +21,8 @@ CHAT_SYSTEM_PROMPT = (
     "## 工具调用规则\n"
     "- 当用户明确要求深入研究、生成调研/研究报告、执行研究方案，或点名调用智能研究助手时，调用 start_smart_research_assistant。\n"
     "- start_smart_research_assistant 会创建后台长任务，工具返回任务入口后需要把入口转述给用户。\n"
+    "- 常规聊天前，系统可能已经调用知识库、Skills 或 MCP；如果有这些结果，优先基于结果回答。\n"
+    "- Skill 结果代表已加载对应 SKILL.md 指令，请按该 Skill 的工作方式组织回答。\n"
     "- 普通问答、方向澄清和闲聊不要调用工具。"
     "\n\n"
     "## 约束\n"

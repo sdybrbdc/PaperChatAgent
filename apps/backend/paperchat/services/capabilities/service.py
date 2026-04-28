@@ -207,13 +207,30 @@ class CapabilityService:
             completed_at=None,
             error=None,
         )
-        output = self._execute_placeholder_or_rag(
-            user_id=user_id,
-            capability=capability,
-            input_payload=input_payload,
-            context=context,
-            dry_run=dry_run,
-        )
+        try:
+            output = await self._execute_capability(
+                user_id=user_id,
+                capability=capability,
+                input_payload=input_payload,
+                context=context,
+                dry_run=dry_run,
+            )
+        except Exception as exc:
+            completed_at = utcnow()
+            self._log(
+                user_id=user_id,
+                capability_key=capability.key,
+                kind=capability.kind,
+                status="failed",
+                input_payload=input_payload,
+                output_payload={},
+                context={**context, "previous_log_id": log["id"]},
+                started_at=started_at,
+                completed_at=completed_at,
+                error={"message": str(exc), "type": exc.__class__.__name__},
+            )
+            raise
+
         completed_log = self._log(
             user_id=user_id,
             capability_key=capability.key,
@@ -228,7 +245,7 @@ class CapabilityService:
         )
         return {"result": output, "log": completed_log}
 
-    def _execute_placeholder_or_rag(
+    async def _execute_capability(
         self,
         *,
         user_id: str,
@@ -245,6 +262,26 @@ class CapabilityService:
                 conversation_id=context.get("conversation_id"),
                 top_k=int(input_payload.get("top_k") or 8),
                 metadata_filter=dict(input_payload.get("metadata_filter") or {}),
+            )
+        if capability.kind == "mcp" and capability.metadata and not dry_run:
+            arguments = (
+                input_payload.get("arguments")
+                if set(input_payload.keys()) <= {"arguments"} and isinstance(input_payload.get("arguments"), dict)
+                else input_payload
+            )
+            return await mcp_service.call_tool_payload(
+                user_id=user_id,
+                service_id=str(capability.metadata.get("service_id") or capability.metadata.get("server_id") or ""),
+                tool_name=str(capability.metadata.get("tool_name") or capability.name),
+                arguments=dict(arguments or {}),
+            )
+        if capability.kind == "skill" and capability.key.startswith("skill."):
+            return skill_service.execute_skill_payload(
+                user_id=user_id,
+                skill_id=capability.key.removeprefix("skill."),
+                input_payload=input_payload,
+                context=context,
+                dry_run=dry_run,
             )
         return {
             "placeholder": True,

@@ -34,6 +34,13 @@ export interface McpTestResultDTO {
   tools: McpToolDTO[]
 }
 
+export interface McpToolCallResultDTO {
+  service: McpServiceDTO
+  toolName: string
+  arguments: Record<string, unknown>
+  result: Record<string, unknown>
+}
+
 export interface McpServiceCreatePayload {
   name: string
   description?: string

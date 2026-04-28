@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { ChatSessionDTO, ChatStreamEventDTO, ConversationGuidanceDTO, MessageDTO } from '../types/chat'
+import type { ChatSessionDTO, ChatStreamEventDTO, ConversationGuidanceDTO, MessageDTO, MessageToolCallDTO } from '../types/chat'
 import {
   createConversation,
   generateConversationDraft,
@@ -88,6 +88,31 @@ export const useConversationStore = defineStore('conversation', () => {
         }
         if (conversation) {
           syncConversation(conversation)
+        }
+        break
+      }
+      case 'message.tool': {
+        const draft = messages.value.find((message) => message.isDraft)
+        if (!draft) break
+        const metadata = (draft.metadata ?? {}) as MessageDTO['metadata']
+        const toolCalls = ([...(metadata?.tool_calls ?? [])] as MessageToolCallDTO[])
+        const toolCall: MessageToolCallDTO = {
+          capability_key: String(event.data.capability_key ?? ''),
+          kind: String(event.data.kind ?? ''),
+          name: String(event.data.name ?? ''),
+          reason: event.data.reason ? String(event.data.reason) : '',
+          status: (event.data.status as MessageToolCallDTO['status']) ?? 'succeeded',
+          summary: event.data.summary ? String(event.data.summary) : '',
+        }
+        const existingIndex = toolCalls.findIndex((item) => item.capability_key === toolCall.capability_key)
+        if (existingIndex >= 0) {
+          toolCalls.splice(existingIndex, 1, toolCall)
+        } else {
+          toolCalls.push(toolCall)
+        }
+        draft.metadata = {
+          ...metadata,
+          tool_calls: toolCalls,
         }
         break
       }
