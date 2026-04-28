@@ -20,6 +20,7 @@ from paperchat.schemas.skills import (
     SkillUpdate,
 )
 from paperchat.services.cc_switch import cc_switch_discovery
+from paperchat.services.skills.lark_cli_runtime import lark_cli_skill_runtime
 from paperchat.services.skills.repository import InMemorySkillRepository, SQLSkillRepository
 
 
@@ -260,7 +261,7 @@ class SkillService:
             "validation": validation,
         }
 
-    def execute_skill_payload(
+    async def execute_skill_payload(
         self,
         *,
         user_id: str,
@@ -281,17 +282,38 @@ class SkillService:
         skill_md = self._skill_md_content(skill)
         if not skill_md.strip():
             raise AppError(status_code=400, code="SKILL_INSTRUCTIONS_EMPTY", message="Skill 指令文件为空或不存在")
-        return {
+        result = {
             "executed": not dry_run,
             "dry_run": dry_run,
             "mode": "instruction_context",
             "skill": self._skill_payload(skill, include_folder=False),
-            "instructions": self._clip_text(skill_md, limit=self.DEFAULT_CONTENT_LIMIT),
-            "files": self._load_context_files(folder, limit=self.DEFAULT_CONTENT_LIMIT),
             "input": input_payload,
             "context": context,
             "message": "已加载 Skill 文件夹上下文，聊天回复将按 SKILL.md 的说明执行。",
+            "instructions": self._clip_text(skill_md, limit=self.DEFAULT_CONTENT_LIMIT),
+            "files": self._load_context_files(folder, limit=self.DEFAULT_CONTENT_LIMIT),
         }
+        if lark_cli_skill_runtime.can_handle(skill):
+            lark_result = await lark_cli_skill_runtime.execute(
+                skill=skill,
+                input_payload=input_payload,
+                dry_run=dry_run,
+            )
+            result = {
+                "executed": not dry_run,
+                "dry_run": dry_run,
+                "mode": "instruction_context+lark_cli",
+                "runtime": {"type": "lark-cli", **lark_result},
+                "skill": self._skill_payload(skill, include_folder=False),
+                "input": input_payload,
+                "context": context,
+                "message": "已加载 Skill 文件夹上下文，聊天回复将按 SKILL.md 的说明执行。",
+                "instructions": self._clip_text(skill_md, limit=self.DEFAULT_CONTENT_LIMIT),
+                "files": self._load_context_files(folder, limit=self.DEFAULT_CONTENT_LIMIT),
+            }
+            if lark_result.get("executed"):
+                result["message"] = "已加载 Lark Skill，并调用本机 lark-cli 获取结果。"
+        return result
 
     def _require_skill(self, user_id: str, skill_id: str) -> dict[str, Any]:
         record = self.repository.get_skill(user_id, skill_id)

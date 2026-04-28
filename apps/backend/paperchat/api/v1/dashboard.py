@@ -43,6 +43,11 @@ async def tool_usage(request: Request, days: int = Query(default=30, ge=1, le=36
     return ok(request, data=dashboard_service.tool_usage_payload(user_id=user.id, days=days))
 
 
+@router.get("/activity", response_model=APIResponse)
+async def activity(request: Request, days: int = Query(default=30, ge=1, le=365), user=Depends(get_current_user)):
+    return ok(request, data=dashboard_service.activity_payload(user_id=user.id, days=days))
+
+
 @router.get("/snapshot", response_model=APIResponse)
 async def dashboard_snapshot(
     request: Request,

@@ -6,7 +6,7 @@ PaperChatAgent 是一个聊天优先的研究助手。
 当前仓库已经从“文档重构 + 前后端骨架联调”推进到“聊天主链路 + 模块化能力接入”的阶段：
 
 - 新文档已经统一为“聊天主链路 + 模块化能力”口径
-- 前端已具备聊天、知识库、MCP、Skills、智能体、模型、后台任务和数据看板页面
+- 前端已具备聊天、知识库、MCP、Skills、智能体、模型、后台任务和富可视化数据看板页面
 - 后端已实现认证、会话、聊天流、知识资料、RAG、MCP、Skills、模型、任务、工作流节点等基础接口
 - 研究工作流已落地为 `LangGraph + AutoGen` 的多节点骨架
 - 聊天链路已接入统一 `Capability` 能力路由，可按需调用 RAG、MCP、Skills 和后续 Agent 工具
@@ -33,7 +33,7 @@ PaperChatAgent 当前采用以下产品定位：
 - `Capability` 是聊天前的统一能力路由层，把 RAG、MCP、Skills 和 Agent 工具接入同一执行入口
 - `模型` 是独立模块，负责模型配置与模型路由
 - `后台任务` 主要展示智能体 / 工作流的执行进度
-- `数据看板` 展示模型调用、输入输出量、任务分布等观测指标
+- `数据看板` 展示模型调用、Token 消耗、工具执行、任务分布、趋势变化和系统事件等观测指标
 
 ## 核心模块
 
@@ -108,8 +108,10 @@ Skills 已重构为类似 Codex / AgentChat 的虚拟文件夹模型：
 
 ### 数据看板
 
-- 展示模型调用次数、输入输出量、任务运行分布等指标
-- 展示能力调用、工具执行、任务状态等观测指标
+- 展示模型调用次数、Token 输入输出、平均延迟、工具调用和任务完成率等核心指标
+- 展示按天聚合的模型调用、工具调用、任务启动和 Token 消耗趋势
+- 展示模型用量排行、任务状态环图、工具调用成功率和最近系统事件
+- 后端提供统一 `snapshot` 快照接口，前端单次加载即可渲染完整看板
 - 用于系统观测，不是运营后台
 
 ## 主链路
@@ -151,6 +153,7 @@ Skills 已重构为类似 Codex / AgentChat 的虚拟文件夹模型：
 - RAG 检索能力接入聊天路由
 - MCP 服务配置、工具发现、工具 schema 和 runtime 执行
 - Agent Skill 导入、创建、查看、编辑、删除、去重和聊天触发
+- 数据看板快照接口、日维度趋势和富可视化页面
 - README 最新截图与完整功能说明
 
 ### 进行中
@@ -160,7 +163,7 @@ Skills 已重构为类似 Codex / AgentChat 的虚拟文件夹模型：
 - Agent workflow 作为 capability 的完整执行入口
 - MCP 工具调用的权限确认、安全拦截和更细粒度错误反馈
 - Skill 参考文件按需加载、上下文裁剪和更精确触发策略
-- 数据看板与真实运行日志的进一步联动
+- 数据看板成本估算、节点耗时和更细粒度错误归因
 
 ### 过渡说明
 
@@ -180,6 +183,9 @@ Agent Skill 列表
 
 Skill 内容编辑
 ![Agent Skill Editor](images/current/skills-editor.png)
+
+数据看板
+![Dashboard Analytics Preview](images/current/dashboard-analytics-preview.png)
 
 ### 历史线框图
 
@@ -215,9 +221,6 @@ Skills 页
 
 后台任务页
 ![Tasks](images/light-main/background-tasks-wireframe.png)
-
-数据看板页
-![Dashboard](images/light-main/dashboard-overview-wireframe.png)
 
 ## 技术栈
 
@@ -256,7 +259,7 @@ Skills 页
 - `Agents`：默认工作流定义、节点定义、运行详情、按任务查看节点运行态
 - `Tasks`：任务创建、任务列表、任务详情、任务报告、任务事件流
 - `Models`：模型提供方、模型路由和调用记录
-- `Dashboard`：任务、模型和工具调用观测指标
+- `Dashboard`：模型调用、Token、工具、任务、趋势和事件观测指标
 
 当前研究工作流骨架采用：
 
@@ -389,12 +392,12 @@ PaperChatAgent/
 │       │   │   ├── capabilities/     # 统一能力注册、执行与日志
 │       │   │   ├── cc_switch/        # 本地 cc-switch Skill 发现
 │       │   │   ├── chat/             # 聊天流、记忆和能力路由
-│       │   │   ├── dashboard/        # 数据看板服务
+│       │   │   ├── dashboard/        # 数据看板快照、趋势和事件服务
 │       │   │   ├── knowledge/        # 知识库服务
 │       │   │   ├── mcp/              # MCP 配置、工具发现与 runtime
 │       │   │   ├── model_router/     # 模型提供方与路由
 │       │   │   ├── rag/              # RAG 检索服务
-│       │   │   ├── skills/           # Agent Skill 虚拟文件夹与 CRUD
+│       │   │   ├── skills/           # Agent Skill 虚拟文件夹、CRUD 与 lark-cli runtime
 │       │   │   ├── storage/          # MinIO / OSS 存储适配
 │       │   │   ├── stream/           # SSE 事件翻译
 │       │   │   └── tasks/            # 后台任务服务
@@ -408,6 +411,7 @@ PaperChatAgent/
 ├── designs/                        # 设计稿
 ├── images/
 │   ├── current/                    # 当前真实页面截图
+│   │   ├── dashboard-analytics-preview.png
 │   │   ├── chat-capability-workbench.png
 │   │   ├── skills-editor.png
 │   │   └── skills-list.png

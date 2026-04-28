@@ -48,6 +48,9 @@ class DashboardService:
             "avg_latency_ms": float(row[4] or 0),
         }
 
+    def _status_success_case(self, column):
+        return case((column.in_(("success", "succeeded", "completed")), 1), else_=0)
+
     def _task_status_counts(self, *, user_id: str, start_at: datetime) -> dict[str, int]:
         with db_session() as session:
             rows = session.execute(
@@ -77,15 +80,17 @@ class DashboardService:
         task_total = sum(task_counts.values())
         completed = task_counts.get("completed", 0) + task_counts.get("success", 0)
         failed = task_counts.get("failed", 0) + task_counts.get("error", 0)
+        tool_call_count = self._tool_call_count(user_id=user_id, start_at=start_at)
         return {
             "range": self._range_payload(start_at=start_at, end_at=end_at, days=days),
             "model_call_count": usage["request_count"],
             "input_token_count": usage["prompt_tokens"],
             "output_token_count": usage["completion_tokens"],
+            "token_count": usage["total_tokens"],
             "recent_task_count": task_total,
             "active_task_count": task_counts.get("running", 0) + task_counts.get("pending", 0),
             "failed_task_count": failed,
-            "tool_call_count": self._tool_call_count(user_id=user_id, start_at=start_at),
+            "tool_call_count": tool_call_count,
             "task_status_distribution": task_counts,
             "usage": usage,
             "tasks": {
@@ -96,6 +101,12 @@ class DashboardService:
                 "pending": task_counts.get("pending", 0),
                 "by_status": task_counts,
                 "completion_rate": completed / task_total if task_total else 0,
+            },
+            "health": {
+                "task_completion_rate": completed / task_total if task_total else 0,
+                "task_failure_rate": failed / task_total if task_total else 0,
+                "avg_latency_ms": usage["avg_latency_ms"],
+                "tool_call_count": tool_call_count,
             },
         }
 
@@ -108,12 +119,14 @@ class DashboardService:
                     PaperChatModelUsageLogRecord.provider_key,
                     PaperChatModelUsageLogRecord.route_key,
                     func.count(PaperChatModelUsageLogRecord.id),
+                    func.coalesce(func.sum(PaperChatModelUsageLogRecord.input_tokens), 0),
+                    func.coalesce(func.sum(PaperChatModelUsageLogRecord.output_tokens), 0),
                     func.coalesce(
                         func.sum(PaperChatModelUsageLogRecord.input_tokens + PaperChatModelUsageLogRecord.output_tokens),
                         0,
                     ),
                     func.coalesce(func.avg(PaperChatModelUsageLogRecord.latency_ms), 0),
-                    func.sum(case((PaperChatModelUsageLogRecord.status == "success", 1), else_=0)),
+                    func.sum(self._status_success_case(PaperChatModelUsageLogRecord.status)),
                 )
                 .where(
                     PaperChatModelUsageLogRecord.user_id == user_id,
@@ -127,7 +140,7 @@ class DashboardService:
                 .order_by(func.count(PaperChatModelUsageLogRecord.id).desc())
             ).all()
         items = []
-        for model_name, provider_key, route_key, count, tokens, latency, success in rows:
+        for model_name, provider_key, route_key, count, input_tokens, output_tokens, tokens, latency, success in rows:
             request_count = int(count or 0)
             success_count = int(success or 0)
             items.append(
@@ -142,8 +155,8 @@ class DashboardService:
                     "error_count": request_count - success_count,
                     "success_rate": success_count / request_count if request_count else 0,
                     "total_tokens": int(tokens or 0),
-                    "input_tokens": 0,
-                    "output_tokens": int(tokens or 0),
+                    "input_tokens": int(input_tokens or 0),
+                    "output_tokens": int(output_tokens or 0),
                     "cost_usd": 0,
                     "avg_latency_ms": float(latency or 0),
                     "latency_ms": float(latency or 0),
@@ -188,6 +201,7 @@ class DashboardService:
                     PaperChatToolInvocationLogRecord.capability_id,
                     PaperChatToolInvocationLogRecord.capability_type,
                     func.count(PaperChatToolInvocationLogRecord.id),
+                    func.sum(self._status_success_case(PaperChatToolInvocationLogRecord.status)),
                     func.coalesce(func.avg(PaperChatToolInvocationLogRecord.latency_ms), 0),
                 )
                 .where(
@@ -204,14 +218,80 @@ class DashboardService:
                 "operation": operation or "tool_invocation",
                 "request_count": int(count or 0),
                 "call_count": int(count or 0),
-                "success_count": int(count or 0),
-                "failure_count": 0,
+                "success_count": int(success or 0),
+                "failure_count": int(count or 0) - int(success or 0),
+                "success_rate": int(success or 0) / int(count or 1),
                 "avg_latency_ms": float(latency or 0),
                 "latency_ms": float(latency or 0),
             }
-            for tool_name, operation, count, latency in rows
+            for tool_name, operation, count, success, latency in rows
         ]
         return {"range": self._range_payload(start_at=start_at, end_at=end_at, days=days), "items": items}
+
+    def activity_payload(self, *, user_id: str, days: int = 30) -> dict[str, Any]:
+        start_at, end_at = self._range(days)
+        labels = self._date_labels(end_at=end_at, days=days)
+        points = {
+            label: {
+                "date": label,
+                "label": label[5:],
+                "model_calls": 0,
+                "tool_calls": 0,
+                "task_count": 0,
+                "token_count": 0,
+            }
+            for label in labels
+        }
+        with db_session() as session:
+            model_rows = session.execute(
+                select(
+                    func.date(PaperChatModelUsageLogRecord.created_at),
+                    func.count(PaperChatModelUsageLogRecord.id),
+                    func.coalesce(
+                        func.sum(PaperChatModelUsageLogRecord.input_tokens + PaperChatModelUsageLogRecord.output_tokens),
+                        0,
+                    ),
+                ).where(
+                    PaperChatModelUsageLogRecord.user_id == user_id,
+                    PaperChatModelUsageLogRecord.created_at >= start_at,
+                )
+                .group_by(func.date(PaperChatModelUsageLogRecord.created_at))
+            ).all()
+            tool_rows = session.execute(
+                select(
+                    func.date(PaperChatToolInvocationLogRecord.created_at),
+                    func.count(PaperChatToolInvocationLogRecord.id),
+                ).where(
+                    PaperChatToolInvocationLogRecord.user_id == user_id,
+                    PaperChatToolInvocationLogRecord.created_at >= start_at,
+                )
+                .group_by(func.date(PaperChatToolInvocationLogRecord.created_at))
+            ).all()
+            task_rows = session.execute(
+                select(
+                    func.date(PaperChatResearchTaskRecord.created_at),
+                    func.count(PaperChatResearchTaskRecord.id),
+                ).where(
+                    PaperChatResearchTaskRecord.user_id == user_id,
+                    PaperChatResearchTaskRecord.created_at >= start_at,
+                )
+                .group_by(func.date(PaperChatResearchTaskRecord.created_at))
+            ).all()
+
+        for day, count, tokens in model_rows:
+            key = self._day_key(day)
+            if key in points:
+                points[key]["model_calls"] = int(count or 0)
+                points[key]["token_count"] = int(tokens or 0)
+        for day, count in tool_rows:
+            key = self._day_key(day)
+            if key in points:
+                points[key]["tool_calls"] = int(count or 0)
+        for day, count in task_rows:
+            key = self._day_key(day)
+            if key in points:
+                points[key]["task_count"] = int(count or 0)
+        return {"range": self._range_payload(start_at=start_at, end_at=end_at, days=days), "items": list(points.values())}
 
     def snapshot_payload(self, *, user_id: str, days: int = 30) -> dict[str, Any]:
         start_at, end_at = self._range(days)
@@ -219,6 +299,7 @@ class DashboardService:
         model_usage = self.model_usage_payload(user_id=user_id, days=days)
         task_usage = self.task_distribution_payload(user_id=user_id, days=days)
         tool_usage = self.tool_usage_payload(user_id=user_id, days=days)
+        activity = self.activity_payload(user_id=user_id, days=days)
         events = self._system_events_payload(user_id=user_id, start_at=start_at)
         return {
             "generated_at": end_at.isoformat(),
@@ -227,8 +308,58 @@ class DashboardService:
             "model_usage": model_usage["items"],
             "task_usage": task_usage["items"],
             "tool_usage": tool_usage["items"],
+            "activity": activity["items"],
+            "insights": self._insights_payload(overview=overview, model_usage=model_usage["items"], tool_usage=tool_usage["items"]),
             "events": events,
         }
+
+    def _date_labels(self, *, end_at: datetime, days: int) -> list[str]:
+        count = max(1, min(days, 31))
+        end_date = end_at.date()
+        return [(end_date - timedelta(days=offset)).isoformat() for offset in reversed(range(count))]
+
+    def _day_key(self, value: Any) -> str:
+        if hasattr(value, "isoformat"):
+            return value.isoformat()[:10]
+        return str(value)[:10]
+
+    def _insights_payload(
+        self,
+        *,
+        overview: dict[str, Any],
+        model_usage: list[dict[str, Any]],
+        tool_usage: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        tasks = dict(overview.get("tasks") or {})
+        usage = dict(overview.get("usage") or {})
+        top_model = model_usage[0] if model_usage else {}
+        top_tool = tool_usage[0] if tool_usage else {}
+        return [
+            {
+                "label": "任务完成率",
+                "value": tasks.get("completion_rate", 0),
+                "unit": "ratio",
+                "tone": "success" if float(tasks.get("completion_rate") or 0) >= 0.8 else "warning",
+            },
+            {
+                "label": "平均延迟",
+                "value": usage.get("avg_latency_ms", 0),
+                "unit": "ms",
+                "tone": "brand",
+            },
+            {
+                "label": "主力模型",
+                "value": top_model.get("model_name") or "暂无",
+                "unit": "text",
+                "tone": "brand",
+            },
+            {
+                "label": "高频工具",
+                "value": top_tool.get("tool_name") or "暂无",
+                "unit": "text",
+                "tone": "success",
+            },
+        ]
 
     def _system_events_payload(self, *, user_id: str, start_at: datetime) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []

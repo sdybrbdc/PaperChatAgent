@@ -25,6 +25,21 @@ class ChatService:
 
     TOOL_RESULT_CHAR_LIMIT = 7000
     MAX_TOOL_CALLS = 3
+    LARK_SKILL_KEYWORDS: dict[str, tuple[str, ...]] = {
+        "lark-doc": ("文档", "云文档", "云空间", "文件", "资料", "搜索", "查找", "doc", "docs"),
+        "lark-wiki": ("知识库", "wiki", "空间", "节点"),
+        "lark-drive": ("云空间", "文件", "文件夹", "上传", "下载", "权限", "评论"),
+        "lark-sheets": ("电子表格", "表格", "sheet", "spreadsheet"),
+        "lark-base": ("多维表格", "base", "bitable", "数据表"),
+        "lark-calendar": ("日历", "日程", "会议", "空闲", "会议室"),
+        "lark-im": ("消息", "群", "聊天", "会话", "im"),
+        "lark-mail": ("邮件", "邮箱", "草稿", "收件箱", "mail"),
+        "lark-task": ("任务", "待办", "清单", "todo"),
+        "lark-contact": ("联系人", "通讯录", "同事", "部门"),
+        "lark-minutes": ("妙记", "minutes"),
+        "lark-vc": ("视频会议", "会议记录", "会议纪要", "vc"),
+        "lark-whiteboard": ("画板", "白板", "流程图", "架构图", "mermaid"),
+    }
 
     @staticmethod
     def _chunk_to_text(content: Any) -> str:
@@ -102,6 +117,9 @@ class ChatService:
     def _skill_trigger_match_reason(self, *, capability: dict[str, Any], user_input: str) -> str:
         if capability.get("kind") != "skill":
             return ""
+        lark_reason = self._lark_skill_match_reason(capability=capability, user_input=user_input)
+        if lark_reason:
+            return lark_reason
         normalized_input = user_input.lower()
         has_skill_intent = any(
             token in normalized_input or token in user_input
@@ -126,6 +144,18 @@ class ChatService:
                 strong_phrase = len(phrase) >= 6 or (has_cjk and len(phrase) >= 3)
                 if has_skill_intent or strong_phrase:
                     return f"用户消息匹配 Skill 触发词：{phrase}"
+        return ""
+
+    def _lark_skill_match_reason(self, *, capability: dict[str, Any], user_input: str) -> str:
+        name = str(capability.get("name") or "").lower()
+        if not name.startswith("lark-"):
+            return ""
+        normalized_input = user_input.lower()
+        if not any(token in normalized_input or token in user_input for token in ("lark", "feishu", "飞书")):
+            return ""
+        for keyword in self.LARK_SKILL_KEYWORDS.get(name, ()):
+            if keyword.lower() in normalized_input or keyword in user_input:
+                return f"用户消息匹配飞书 {name} 场景：{keyword}"
         return ""
 
     def _deterministic_skill_calls(
@@ -176,6 +206,8 @@ class ChatService:
             "\n4. skill.* 用于加载真实 SKILL.md 指令上下文，input 形如 {\"instruction\":\"...\",\"user_input\":\"...\"}。"
             "\n5. mcp.* 只有在参数能从用户消息中明确推出时才调用，input 必须匹配该工具的 input_schema。"
             "\n6. 删除、发送、写入、修改类 MCP 工具只有在用户明确要求时才调用。"
+            "\n7. 飞书/Lark 场景优先选择最具体的 lark-* Skill；云文档/云空间资源发现优先选择 lark-doc。"
+            "\n8. lark-openapi-explorer 只在现有 lark-* Skill 无法覆盖需求时选择。"
         )
         model = get_tool_call_chat_model()
         try:

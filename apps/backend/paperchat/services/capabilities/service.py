@@ -276,7 +276,7 @@ class CapabilityService:
                 arguments=dict(arguments or {}),
             )
         if capability.kind == "skill" and capability.key.startswith("skill."):
-            return skill_service.execute_skill_payload(
+            return await skill_service.execute_skill_payload(
                 user_id=user_id,
                 skill_id=capability.key.removeprefix("skill."),
                 input_payload=input_payload,
