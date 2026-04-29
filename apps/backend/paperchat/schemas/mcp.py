@@ -37,6 +37,13 @@ class McpServiceUpdate(BaseModel):
     status: McpServiceStatus | None = None
 
 
+class McpServiceImportRequest(BaseModel):
+    config: Any
+    overwrite_existing: bool = True
+    refresh_tools: bool = False
+    status: McpServiceStatus = "enabled"
+
+
 class McpServicePayload(BaseModel):
     id: str
     name: str

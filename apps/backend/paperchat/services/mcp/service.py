@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import shlex
 from typing import Any
 
 from paperchat.api.errcode import AppError
-from paperchat.schemas.mcp import McpServiceCreate, McpServiceUpdate
+from paperchat.schemas.mcp import McpServiceCreate, McpServiceImportRequest, McpServiceUpdate
 from paperchat.services.cc_switch import cc_switch_discovery
 from paperchat.services.mcp.repository import InMemoryMcpRepository, SQLMcpRepository
 from paperchat.services.mcp.runtime import mcp_runtime
@@ -79,6 +81,49 @@ class McpService:
     def create_service_payload(self, user_id: str, payload: McpServiceCreate) -> dict[str, Any]:
         record = self.repository.create_service(user_id, payload.model_dump())
         return self._service_payload(record)
+
+    async def import_services_payload(self, user_id: str, payload: McpServiceImportRequest) -> dict[str, Any]:
+        services = self._extract_import_services(payload.config, default_status=payload.status)
+        if not services:
+            raise AppError(status_code=400, code="MCP_IMPORT_EMPTY", message="未识别到可导入的 MCP 服务配置")
+
+        existing = self.repository.list_services(user_id)
+        created = 0
+        updated = 0
+        refreshed = 0
+        refresh_errors: list[dict[str, Any]] = []
+        items: list[dict[str, Any]] = []
+
+        for service_config in services:
+            match = self._find_existing_import_service(existing, service_config)
+            if match and payload.overwrite_existing:
+                record = self.repository.update_service(user_id, match["id"], service_config) or match
+                updated += 1
+            elif match:
+                record = match
+            else:
+                record = self.repository.create_service(user_id, service_config)
+                created += 1
+
+            if payload.refresh_tools and record.get("status") == "enabled":
+                try:
+                    refresh_payload = await self.refresh_tools_payload(user_id, record["id"])
+                    if refresh_payload.get("ok"):
+                        refreshed += 1
+                except Exception as exc:
+                    refresh_errors.append(
+                        {"service_id": record["id"], "name": record.get("name", ""), "message": str(exc)}
+                    )
+            items.append(self._service_payload(record))
+
+        return {
+            "created": created,
+            "updated": updated,
+            "refreshed": refreshed,
+            "refresh_errors": refresh_errors,
+            "total": len(items),
+            "items": items,
+        }
 
     def get_service_payload(self, user_id: str, service_id: str) -> dict[str, Any]:
         record = self._require_service(user_id, service_id)
@@ -199,6 +244,157 @@ class McpService:
             if item.get("name") == discovered.get("name") and secret_config.get("source") == "cc-switch":
                 return item
         return None
+
+    def _find_existing_import_service(
+        self,
+        existing: list[dict[str, Any]],
+        imported: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        import_name = (imported.get("secret_config") or {}).get("import_name")
+        for item in existing:
+            secret_config = item.get("secret_config") or {}
+            if import_name and secret_config.get("source") == "json-import" and secret_config.get("import_name") == import_name:
+                return item
+            if item.get("name") == imported.get("name"):
+                return item
+        return None
+
+    def _extract_import_services(self, config: Any, *, default_status: str) -> list[dict[str, Any]]:
+        data = self._parse_import_config(config)
+        entries: list[tuple[str, Any]] = []
+        if isinstance(data, dict) and isinstance(data.get("mcpServers"), dict):
+            entries = [(str(name), value) for name, value in data["mcpServers"].items()]
+        elif isinstance(data, dict) and isinstance(data.get("servers"), dict):
+            entries = [(str(name), value) for name, value in data["servers"].items()]
+        elif isinstance(data, dict) and isinstance(data.get("servers"), list):
+            entries = [
+                (str(item.get("name") or item.get("id") or f"mcp-{index + 1}"), item)
+                for index, item in enumerate(data["servers"])
+                if isinstance(item, dict)
+            ]
+        elif isinstance(data, dict) and self._looks_like_single_service(data):
+            entries = [(str(data.get("name") or data.get("id") or "MCP Server"), data)]
+        elif isinstance(data, dict):
+            entries = [(str(name), value) for name, value in data.items() if isinstance(value, dict)]
+
+        services: list[dict[str, Any]] = []
+        for name, raw_config in entries:
+            if not isinstance(raw_config, dict):
+                continue
+            services.append(self._normalize_import_service(name, raw_config, default_status=default_status))
+        return services
+
+    def _parse_import_config(self, config: Any) -> Any:
+        if isinstance(config, str):
+            try:
+                return json.loads(config)
+            except json.JSONDecodeError as exc:
+                raise AppError(status_code=400, code="MCP_IMPORT_JSON_INVALID", message=f"JSON 格式不正确：{exc}") from exc
+        return config
+
+    def _looks_like_single_service(self, data: dict[str, Any]) -> bool:
+        keys = {
+            "name",
+            "type",
+            "transport",
+            "transport_type",
+            "command",
+            "args",
+            "url",
+            "endpoint_url",
+            "headers",
+            "env",
+        }
+        return any(key in data for key in keys)
+
+    def _normalize_import_service(
+        self,
+        name_hint: str,
+        raw_config: dict[str, Any],
+        *,
+        default_status: str,
+    ) -> dict[str, Any]:
+        name = str(raw_config.get("name") or raw_config.get("id") or name_hint or "MCP Server").strip()
+        if not name:
+            raise AppError(status_code=400, code="MCP_IMPORT_NAME_MISSING", message="MCP 服务缺少名称")
+
+        command = str(raw_config.get("command") or "").strip()
+        args = self._string_list(raw_config.get("args"))
+        if command and not args:
+            parts = shlex.split(command)
+            if len(parts) > 1:
+                command = parts[0]
+                args = parts[1:]
+
+        endpoint_url = str(raw_config.get("endpoint_url") or raw_config.get("url") or "").strip()
+        transport_type = self._normalize_transport(raw_config, command=command, endpoint_url=endpoint_url)
+        if transport_type == "stdio" and not command:
+            raise AppError(status_code=400, code="MCP_IMPORT_COMMAND_MISSING", message=f"{name} 缺少 command")
+        if transport_type != "stdio" and not endpoint_url:
+            raise AppError(status_code=400, code="MCP_IMPORT_URL_MISSING", message=f"{name} 缺少 url 或 endpoint_url")
+
+        enabled = raw_config.get("enabled")
+        raw_status = str(raw_config.get("status") or "").strip()
+        status = raw_status if raw_status in {"enabled", "disabled"} else default_status
+        if enabled is False:
+            status = "disabled"
+
+        timeout = raw_config.get("timeout")
+        cwd = str(raw_config.get("cwd") or "").strip()
+        secret_config = {
+            "source": "json-import",
+            "import_name": name_hint,
+            "timeout": timeout,
+            "raw_config": self._redact_import_config(raw_config),
+        }
+        if cwd:
+            secret_config["cwd"] = cwd
+
+        return {
+            "name": name,
+            "description": str(raw_config.get("description") or ""),
+            "transport_type": transport_type,
+            "command": command,
+            "args": args,
+            "endpoint_url": endpoint_url,
+            "headers": self._string_dict(raw_config.get("headers")),
+            "env": self._string_dict(raw_config.get("env")),
+            "secret_config": secret_config,
+            "status": status,
+        }
+
+    def _normalize_transport(self, raw_config: dict[str, Any], *, command: str, endpoint_url: str) -> str:
+        raw = str(
+            raw_config.get("transport_type")
+            or raw_config.get("transport")
+            or raw_config.get("type")
+            or ("stdio" if command else "streamable_http" if endpoint_url else "stdio")
+        ).strip().lower()
+        if raw in {"http", "streamable-http", "streamable_http"}:
+            return "streamable_http"
+        if raw in {"stdio", "sse", "websocket"}:
+            return raw
+        raise AppError(status_code=400, code="MCP_IMPORT_TRANSPORT_UNSUPPORTED", message=f"不支持的 MCP 传输类型：{raw}")
+
+    def _string_list(self, value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        if isinstance(value, str) and value.strip():
+            return shlex.split(value)
+        return []
+
+    def _string_dict(self, value: Any) -> dict[str, str]:
+        if not isinstance(value, dict):
+            return {}
+        return {str(key): str(item) for key, item in value.items()}
+
+    def _redact_import_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        redacted = dict(config)
+        if redacted.get("env"):
+            redacted["env"] = {key: "***" for key in dict(redacted["env"]).keys()}
+        if redacted.get("headers"):
+            redacted["headers"] = {key: "***" for key in dict(redacted["headers"]).keys()}
+        return redacted
 
     def _validate_service_config(self, record: dict[str, Any]) -> tuple[bool, str]:
         transport_type = record.get("transport_type", "stdio")

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 
 from paperchat.api.responses import APIResponse, ok
 from paperchat.auth import get_current_user
-from paperchat.schemas.mcp import McpServiceCreate, McpServiceUpdate, McpToolCallRequest
+from paperchat.schemas.mcp import McpServiceCreate, McpServiceImportRequest, McpServiceUpdate, McpToolCallRequest
 from paperchat.services.mcp import mcp_service
 
 
@@ -29,6 +29,11 @@ async def sync_cc_switch_mcp_services(request: Request, user=Depends(get_current
 @router.post("/services", response_model=APIResponse)
 async def create_mcp_service(payload: McpServiceCreate, request: Request, user=Depends(get_current_user)):
     return ok(request, data=mcp_service.create_service_payload(user.id, payload))
+
+
+@router.post("/import-json", response_model=APIResponse)
+async def import_mcp_json(payload: McpServiceImportRequest, request: Request, user=Depends(get_current_user)):
+    return ok(request, data=await mcp_service.import_services_payload(user.id, payload))
 
 
 @router.get("/services/{service_id}", response_model=APIResponse)

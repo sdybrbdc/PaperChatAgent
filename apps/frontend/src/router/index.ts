@@ -7,6 +7,7 @@ import AgentRunPage from '../pages/agents/AgentRunPage.vue'
 import AgentsListPage from '../pages/agents/AgentsListPage.vue'
 import DashboardPage from '../pages/dashboard/DashboardPage.vue'
 import KnowledgePage from '../pages/knowledge/KnowledgePage.vue'
+import McpDetailPage from '../pages/mcp/McpDetailPage.vue'
 import McpPage from '../pages/mcp/McpPage.vue'
 import ModelsPage from '../pages/models/ModelsPage.vue'
 import SkillsPage from '../pages/skills/SkillsPage.vue'
@@ -39,6 +40,7 @@ const router = createRouter({
         { path: 'chat', name: 'chat', component: ChatPage, meta: { navKey: 'chat' } },
         { path: 'knowledge', name: 'knowledge', component: KnowledgePage, meta: { navKey: 'knowledge' } },
         { path: 'mcp', name: 'mcp', component: McpPage, meta: { navKey: 'mcp' } },
+        { path: 'mcp/:serviceId', name: 'mcp-detail', component: McpDetailPage, meta: { navKey: 'mcp' } },
         { path: 'skills', name: 'skills', component: SkillsPage, meta: { navKey: 'skills' } },
         { path: 'agents', name: 'agents', component: AgentsListPage, meta: { navKey: 'agents' } },
         { path: 'agents/runs/:runId', name: 'agent-run', component: AgentRunPage, meta: { navKey: 'agents' } },
