@@ -28,3 +28,4 @@ dist/
 *.log
 tmp/
 temp/
+apps/backend/data/

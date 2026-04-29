@@ -53,7 +53,11 @@ class KnowledgeFileRecord:
     content_type: str = "application/octet-stream"
     size_bytes: int = 0
     status: str = "pending"
+    parser_status: str = "pending"
+    index_status: str = "pending"
     title: str = ""
+    object_key: str = ""
+    parsed_text_object_key: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
     chunk_count: int = 0
     error_message: str = ""
@@ -125,6 +129,7 @@ class InMemoryKnowledgeRepository:
     def add_file(
         self,
         *,
+        file_id: str | None = None,
         user_id: str,
         knowledge_base_id: str,
         filename: str,
@@ -133,11 +138,15 @@ class InMemoryKnowledgeRepository:
         content_type: str,
         size_bytes: int,
         title: str,
+        object_key: str = "",
+        parsed_text_object_key: str = "",
+        parser_status: str = "pending",
+        index_status: str = "pending",
         metadata: dict[str, Any],
     ) -> KnowledgeFileRecord:
         with self._lock:
             record = KnowledgeFileRecord(
-                id=str(uuid4()),
+                id=file_id or str(uuid4()),
                 knowledge_base_id=knowledge_base_id,
                 user_id=user_id,
                 filename=filename,
@@ -145,7 +154,12 @@ class InMemoryKnowledgeRepository:
                 source_uri=source_uri,
                 content_type=content_type,
                 size_bytes=size_bytes,
+                status=index_status,
+                parser_status=parser_status,
+                index_status=index_status,
                 title=title or filename,
+                object_key=object_key,
+                parsed_text_object_key=parsed_text_object_key,
                 metadata=dict(metadata),
             )
             self.files[record.id] = record
@@ -178,6 +192,9 @@ class InMemoryKnowledgeRepository:
             record = self.files.get(file_id)
             if record is None:
                 return None
+            if "status" in changes:
+                record.status = changes["status"]
+                record.index_status = changes["status"]
             for key, value in changes.items():
                 setattr(record, key, value)
             record.updated_at = utcnow()
@@ -242,7 +259,11 @@ class SQLKnowledgeRepository:
             content_type=record.mime_type,
             size_bytes=int((record.metadata_json or {}).get("size_bytes") or 0),
             status=status,
+            parser_status=record.parser_status,
+            index_status=record.index_status,
             title=record.title,
+            object_key=record.object_key,
+            parsed_text_object_key=record.parsed_text_object_key,
             metadata=record.metadata_json or {},
             chunk_count=record.chunk_count,
             error_message=record.error_text,
@@ -300,6 +321,7 @@ class SQLKnowledgeRepository:
     def add_file(
         self,
         *,
+        file_id: str | None = None,
         user_id: str,
         knowledge_base_id: str,
         filename: str,
@@ -308,23 +330,31 @@ class SQLKnowledgeRepository:
         content_type: str,
         size_bytes: int,
         title: str,
+        object_key: str = "",
+        parsed_text_object_key: str = "",
+        parser_status: str = "pending",
+        index_status: str = "pending",
         metadata: dict[str, Any],
     ) -> KnowledgeFileRecord:
         metadata_json = {**metadata, "size_bytes": size_bytes}
         with db_session() as session:
-            record = tables.PaperChatKnowledgeFileRecord(
-                knowledge_base_id=knowledge_base_id,
-                user_id=user_id,
-                source_type=source_type,
-                title=title or filename,
-                filename=filename,
-                mime_type=content_type,
-                source_url=source_uri,
-                object_key=source_uri,
-                parser_status="parsed",
-                index_status="pending",
-                metadata_json=metadata_json,
-            )
+            record_data = {
+                "knowledge_base_id": knowledge_base_id,
+                "user_id": user_id,
+                "source_type": source_type,
+                "title": title or filename,
+                "filename": filename,
+                "mime_type": content_type,
+                "source_url": source_uri,
+                "object_key": object_key or source_uri,
+                "parsed_text_object_key": parsed_text_object_key,
+                "parser_status": parser_status,
+                "index_status": index_status,
+                "metadata_json": metadata_json,
+            }
+            if file_id:
+                record_data["id"] = file_id
+            record = tables.PaperChatKnowledgeFileRecord(**record_data)
             session.add(record)
             base = session.get(tables.PaperChatKnowledgeBaseRecord, knowledge_base_id)
             if base is not None:
@@ -366,12 +396,22 @@ class SQLKnowledgeRepository:
                 return None
             if "status" in changes:
                 record.index_status = "indexed" if changes["status"] == "indexed" else changes["status"]
+            if "parser_status" in changes:
+                record.parser_status = changes["parser_status"]
+            if "index_status" in changes:
+                record.index_status = changes["index_status"]
             if "chunk_count" in changes:
                 record.chunk_count = changes["chunk_count"]
             if "metadata" in changes:
                 record.metadata_json = changes["metadata"]
             if "error_message" in changes:
                 record.error_text = changes["error_message"]
+            if "source_uri" in changes:
+                record.source_url = changes["source_uri"]
+            if "object_key" in changes:
+                record.object_key = changes["object_key"]
+            if "parsed_text_object_key" in changes:
+                record.parsed_text_object_key = changes["parsed_text_object_key"]
             record.updated_at = utcnow()
             session.flush()
             base = session.get(tables.PaperChatKnowledgeBaseRecord, record.knowledge_base_id)
@@ -501,9 +541,11 @@ class KnowledgeService:
             "content_type": record.content_type,
             "size_bytes": record.size_bytes,
             "status": record.status,
-            "parser_status": "parsed" if record.status == "indexed" else record.status,
-            "index_status": record.status,
+            "parser_status": record.parser_status,
+            "index_status": record.index_status,
             "title": record.title,
+            "object_key": record.object_key,
+            "parsed_text_object_key": record.parsed_text_object_key,
             "metadata": record.metadata,
             "chunk_count": record.chunk_count,
             "error_message": record.error_message,
@@ -608,15 +650,21 @@ class KnowledgeService:
         user_id: str,
         knowledge_base_id: str,
         *,
+        file_id: str | None = None,
         filename: str,
         content_type: str,
         size_bytes: int,
         source_uri: str = "",
         title: str = "",
+        object_key: str = "",
+        parsed_text_object_key: str = "",
+        parser_status: str = "pending",
+        index_status: str = "pending",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self._require_base(user_id, knowledge_base_id)
         record = self.repository.add_file(
+            file_id=file_id,
             user_id=user_id,
             knowledge_base_id=knowledge_base_id,
             filename=filename,
@@ -625,6 +673,10 @@ class KnowledgeService:
             content_type=content_type,
             size_bytes=size_bytes,
             title=title,
+            object_key=object_key,
+            parsed_text_object_key=parsed_text_object_key,
+            parser_status=parser_status,
+            index_status=index_status,
             metadata=metadata or {},
         )
         return self._file_payload(record)

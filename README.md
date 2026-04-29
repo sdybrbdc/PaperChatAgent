@@ -12,7 +12,7 @@ PaperChatAgent 是一个聊天优先的研究助手。
 - 聊天链路已接入统一 `Capability` 能力路由，可按需调用 RAG、MCP、Skills 和后续 Agent 工具
 - Skills 已支持类似 Codex / AgentChat 的本地 Skill 导入、内容查看、文件编辑、自定义创建、删除和聊天触发
 - MCP 已支持服务配置、工具发现、工具 schema 查看和 runtime 执行
-- 资料解析、切片、向量化、智能体节点恢复和更完整的权限确认仍在持续完善
+- 知识库已接入真实 RAG 链路：MinIO 原文保留、解析产物回写、LlamaIndex 分块、MySQL chunk 记录、Chroma 持久化向量索引和 Agentic RAG 回答
 
 ## 核心痛点
 
@@ -62,7 +62,10 @@ PaperChatAgent 当前采用以下产品定位：
 
 - 管理按名称组织的知识库、文件和解析结果
 - 支持“知识库列表页 + 知识库详情页”两层结构
-- 支持 PDF 上传、arXiv 导入、资料沉淀、向量检索准备
+- 支持 Markdown、TXT、PDF 上传，原始文件保留到 MinIO，解析后的文本产物回写 MinIO
+- 使用 LlamaIndex `SentenceSplitter` 做结构感知 + 句子级切分，chunk 写入 MySQL，向量写入本地 Chroma `PersistentClient`
+- 检索采用“小块召回、大上下文回答”：先召回高相关 chunk，再按需扩展相邻 chunk 组成回答上下文
+- 支持 Agentic RAG：query planner、多 query 动态检索、自评、补充检索、引用证据输出
 - RAG 检索能力已接入 capability 层，可被聊天按需调用
 - 主要在聊天阶段被模型按需使用，而不是作为主入口
 
@@ -150,7 +153,7 @@ Skills 已重构为类似 Codex / AgentChat 的虚拟文件夹模型：
 - 用户长期记忆和短期会话记忆上下文
 - 多节点研究工作流骨架与任务进度回传
 - Capability 能力注册、路由、执行和日志骨架
-- RAG 检索能力接入聊天路由
+- 专业 RAG 后端链路：MinIO 原文与解析产物、LlamaIndex 分块、MySQL chunk、Chroma 持久化索引、真实检索、相邻 chunk 扩展和 Agentic 回答
 - MCP 服务配置、工具发现、工具 schema 和 runtime 执行
 - Agent Skill 导入、创建、查看、编辑、删除、去重和聊天触发
 - 数据看板快照接口、日维度趋势和富可视化页面
@@ -158,7 +161,6 @@ Skills 已重构为类似 Codex / AgentChat 的虚拟文件夹模型：
 
 ### 进行中
 
-- 资料解析、切片、向量化的完整异步链路
 - 后台任务与工作流节点运行的正式持久化和恢复
 - Agent workflow 作为 capability 的完整执行入口
 - MCP 工具调用的权限确认、安全拦截和更细粒度错误反馈
@@ -177,6 +179,9 @@ Skills 已重构为类似 Codex / AgentChat 的虚拟文件夹模型：
 
 聊天工作台
 ![Chat Capability Workbench](images/current/chat-capability-workbench.png)
+
+知识库 RAG 工作台
+![Knowledge RAG Workspace](images/current/knowledge-rag-workspace.png)
 
 Agent Skill 列表
 ![Agent Skill List](images/current/skills-list.png)
@@ -315,6 +320,19 @@ uv run uvicorn paperchat.main:app --host 127.0.0.1 --port 8000 --reload
 - API：`http://127.0.0.1:8000/api/v1`
 - Swagger：`http://127.0.0.1:8000/swagger`
 
+### RAG 配置
+
+RAG 参数集中放在 `apps/backend/paperchat/config.example.yaml` 的 `rag:` 配置段，复制为本地 `config.yaml` 后即可调整。当前默认值保持：
+
+- `chunk_size: 900`，`chunk_overlap: 150`
+- `initial_retrieval_top_k: 20`
+- `default_retrieve_top_k: 8`，`default_answer_top_k: 8`
+- `default_expand_window: 1`
+- `max_agent_iterations: 3`
+- `embedding_batch_size: 10`
+
+Chroma 使用 `PersistentClient`，默认持久化目录为 `apps/backend/data/chroma`。
+
 ### 后台任务执行
 
 当前版本的后台任务采用 Python 进程内异步任务实现，而不是独立 worker。
@@ -413,6 +431,7 @@ PaperChatAgent/
 │   ├── current/                    # 当前真实页面截图
 │   │   ├── dashboard-analytics-preview.png
 │   │   ├── chat-capability-workbench.png
+│   │   ├── knowledge-rag-workspace.png
 │   │   ├── skills-editor.png
 │   │   └── skills-list.png
 │   └── light-main/                 # 历史线框图
@@ -424,7 +443,7 @@ PaperChatAgent/
 
 ## 后续重点
 
-- 打通知识库解析、切片、向量化与检索的完整生产链路
+- 增强 RAG 的复杂文档解析、表格结构抽取、OCR 和 rerank 策略
 - 将后台任务页与智能体节点运行态做完整真实联调
 - 扩展 MCP 工具、RAG 工具、领域 Skills 和智能体工具
 - 给能力调用增加更完整的权限、安全确认和可观测性

@@ -255,12 +255,13 @@ class CapabilityService:
         dry_run: bool,
     ) -> dict[str, Any]:
         if capability.key == "rag.retrieve" and not dry_run:
+            raw_top_k = input_payload.get("top_k")
             return rag_service.retrieve_payload(
                 user_id=user_id,
                 query=str(input_payload.get("query") or ""),
                 knowledge_base_ids=list(input_payload.get("knowledge_base_ids") or []),
                 conversation_id=context.get("conversation_id"),
-                top_k=int(input_payload.get("top_k") or 8),
+                top_k=int(raw_top_k) if raw_top_k not in (None, "") else None,
                 metadata_filter=dict(input_payload.get("metadata_filter") or {}),
             )
         if capability.kind == "mcp" and capability.metadata and not dry_run:

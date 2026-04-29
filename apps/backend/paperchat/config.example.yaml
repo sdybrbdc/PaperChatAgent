@@ -22,6 +22,25 @@ vector_db:
   host: "127.0.0.1"
   port: "19530"
   mode: "chroma"
+  persist_dir: "data/chroma" # Chroma PersistentClient 本地持久化目录，当前默认写入后端 data/chroma。
+
+rag:
+  collection_prefix: "paperchat_kb" # Chroma collection 名称前缀，最终格式为 paperchat_kb_{knowledge_base_id}。
+  chunk_size: 900 # LlamaIndex SentenceSplitter 单块目标大小，当前默认 900。
+  chunk_overlap: 150 # 相邻 chunk 重叠大小，用于保留跨块语义，当前默认 150。
+  embedding_batch_size: 10 # Embedding 批量请求大小，DashScope text-embedding-v4 当前建议不超过 10。
+  initial_retrieval_top_k: 20 # 向量检索初召回数量，先多召回再去重/截断，当前默认 20。
+  default_retrieve_top_k: 8 # /knowledge/rag/retrieve 未传 top_k 时的返回数量，当前默认 8。
+  max_retrieve_top_k: 50 # /knowledge/rag/retrieve 允许返回的最大数量，防止单次查询过大。
+  default_answer_top_k: 8 # /knowledge/rag/answer 未传 top_k 时用于回答的证据数量，当前默认 8。
+  max_answer_top_k: 20 # /knowledge/rag/answer 允许使用的最大证据数量，避免上下文过长。
+  default_expand_window: 1 # 命中 chunk 的默认相邻扩展窗口，1 表示前后各取 1 个。
+  max_expand_window: 5 # 相邻扩展窗口上限，防止一次拼接过多上下文。
+  max_agent_iterations: 3 # Agentic RAG 自评和补充检索的最大轮数，当前默认 3。
+  max_planned_queries: 4 # Query Planner 每轮最多执行的检索 query 数，当前默认 4。
+  evaluator_context_char_limit: 12000 # 自评阶段传给 LLM 的 evidence 字符上限，当前默认 12000。
+  synthesis_context_char_limit: 18000 # 最终回答阶段传给 LLM 的 evidence 字符上限，当前默认 18000。
+  citation_snippet_chars: 320 # citations 中 snippet 的最大字符数，当前默认 320。
 
 storage:
   mode: "minio"

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+from uuid import uuid4
+
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, Request, UploadFile
 
 from paperchat.api.responses import APIResponse, ok
 from paperchat.auth import get_current_user
@@ -12,9 +15,10 @@ from paperchat.schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseUpdate,
 )
-from paperchat.schemas.rag import RagRetrieveRequest
+from paperchat.schemas.rag import RagAnswerRequest, RagRetrieveRequest
 from paperchat.services.knowledge import knowledge_service
 from paperchat.services.rag import rag_service
+from paperchat.services.storage import storage_service
 
 
 router = APIRouter(prefix="/knowledge", tags=["Knowledge"])
@@ -231,9 +235,52 @@ async def retrieve(
     )
 
 
+@router.post("/rag/answer", response_model=APIResponse)
+async def answer(
+    payload: RagAnswerRequest,
+    request: Request,
+    user=Depends(get_current_user),
+):
+    return ok(
+        request,
+        data=rag_service.answer_payload(
+            user_id=user.id,
+            query=payload.query,
+            knowledge_base_ids=payload.knowledge_base_ids,
+            conversation_id=payload.conversation_id,
+            top_k=payload.top_k,
+            agentic=payload.agentic,
+        ),
+    )
+
+
+@router.post("/rag/chunks/{chunk_id}/expand", response_model=APIResponse)
+async def expand_chunk(
+    chunk_id: str,
+    request: Request,
+    window: int | None = Query(default=None, ge=0),
+    user=Depends(get_current_user),
+):
+    return ok(request, data=rag_service.expand_chunk_payload(user_id=user.id, chunk_id=chunk_id, window=window))
+
+
+@router.get("/rag/files/{file_id}/index-status", response_model=APIResponse)
+async def get_index_status(file_id: str, request: Request, user=Depends(get_current_user)):
+    return ok(request, data=rag_service.index_status_payload(user_id=user.id, file_id=file_id))
+
+
 @router.post("/rag/files/{file_id}/index", response_model=APIResponse)
-async def index_file(file_id: str, request: Request, user=Depends(get_current_user)):
-    return ok(request, data=rag_service.index_file_payload(user_id=user.id, file_id=file_id))
+async def index_file(
+    file_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+):
+    data = rag_service.index_file_payload(user_id=user.id, file_id=file_id)
+    job = data.get("job") or {}
+    if job.get("id"):
+        background_tasks.add_task(rag_service.run_index_job, user_id=user.id, file_id=file_id, job_id=job["id"])
+    return ok(request, data=data)
 
 
 @router.get("/{knowledge_base_id}", response_model=APIResponse)
@@ -325,22 +372,39 @@ async def list_files_v1(
 async def upload_file_v1(
     knowledge_base_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user=Depends(get_current_user),
 ):
     content = await file.read()
+    file_id = str(uuid4())
+    filename = Path(file.filename or "upload.pdf").name
+    object_key = f"uploads/{user.id}/{knowledge_base_id}/{file_id}/{filename}"
+    storage = storage_service.upload_bytes(
+        filename=filename,
+        content_type=file.content_type or "application/octet-stream",
+        data=content,
+        object_key=object_key,
+    )
+    file_payload = knowledge_service.create_upload_placeholder_payload(
+        user.id,
+        knowledge_base_id,
+        file_id=file_id,
+        filename=filename,
+        content_type=file.content_type or "application/octet-stream",
+        size_bytes=len(content),
+        source_uri=storage["url"],
+        object_key=storage["object_key"],
+        title=filename,
+        parser_status="pending",
+        index_status="pending",
+        metadata={"storage_bucket": storage["bucket_name"]},
+    )
+    job = rag_service.create_index_job(user_id=user.id, file_id=file_payload["id"], metadata={"trigger": "upload"})
+    background_tasks.add_task(rag_service.run_index_job, user_id=user.id, file_id=file_payload["id"], job_id=job["id"])
     return ok(
         request,
-        data=knowledge_service.create_upload_placeholder_payload(
-            user.id,
-            knowledge_base_id,
-            filename=file.filename or "upload.pdf",
-            content_type=file.content_type or "application/octet-stream",
-            size_bytes=len(content),
-            source_uri="",
-            title=file.filename or "上传文件",
-            metadata={"upload_placeholder": True},
-        ),
+        data={**file_payload, "index_job": job},
     )
 
 

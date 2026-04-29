@@ -10,8 +10,16 @@ class RagRetrieveRequest(BaseModel):
     query: str = Field(min_length=1)
     knowledge_base_ids: list[str] = Field(default_factory=list)
     conversation_id: str | None = None
-    top_k: int = Field(default=8, ge=1, le=50)
+    top_k: int | None = Field(default=None, ge=1)
     metadata_filter: dict[str, Any] = Field(default_factory=dict)
+
+
+class RagAnswerRequest(BaseModel):
+    query: str = Field(min_length=1)
+    knowledge_base_ids: list[str] = Field(default_factory=list)
+    conversation_id: str | None = None
+    top_k: int | None = Field(default=None, ge=1)
+    agentic: bool = True
 
 
 class RagSourcePayload(BaseModel):

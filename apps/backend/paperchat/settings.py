@@ -35,6 +35,7 @@ class VectorDBSettings(BaseModel):
     host: str = "127.0.0.1"
     port: str = "19530"
     mode: str = "chroma"
+    persist_dir: str = "data/chroma"
 
 
 class OSSSettings(BaseModel):
@@ -76,6 +77,25 @@ class MultiModelsSettings(BaseModel):
     rerank: ModelEndpointSettings = Field(default_factory=ModelEndpointSettings)
 
 
+class RagSettings(BaseModel):
+    collection_prefix: str = "paperchat_kb"
+    chunk_size: int = 900
+    chunk_overlap: int = 150
+    embedding_batch_size: int = 10
+    initial_retrieval_top_k: int = 20
+    default_retrieve_top_k: int = 8
+    max_retrieve_top_k: int = 50
+    default_answer_top_k: int = 8
+    max_answer_top_k: int = 20
+    default_expand_window: int = 1
+    max_expand_window: int = 5
+    max_agent_iterations: int = 3
+    max_planned_queries: int = 4
+    evaluator_context_char_limit: int = 12000
+    synthesis_context_char_limit: int = 18000
+    citation_snippet_chars: int = 320
+
+
 class AppSettings(BaseModel):
     server: ServerSettings = Field(default_factory=ServerSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
@@ -83,6 +103,7 @@ class AppSettings(BaseModel):
     vector_db: VectorDBSettings = Field(default_factory=VectorDBSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     multi_models: MultiModelsSettings = Field(default_factory=MultiModelsSettings)
+    rag: RagSettings = Field(default_factory=RagSettings)
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
     )
