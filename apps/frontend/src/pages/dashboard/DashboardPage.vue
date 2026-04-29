@@ -5,13 +5,10 @@ import {
   CircleCheck,
   Connection,
   Cpu,
-  DataAnalysis,
   Download,
-  Operation,
   Refresh,
   Timer,
   TrendCharts,
-  Warning,
 } from '@element-plus/icons-vue'
 import { createDashboardSnapshot, getDashboardSnapshot } from '../../apis/dashboard'
 import type { DashboardActivityDTO, DashboardSnapshotDTO } from '../../types/dashboard'
@@ -34,14 +31,19 @@ const taskUsage = computed(() => snapshot.value?.taskUsage ?? [])
 const toolUsage = computed(() => snapshot.value?.toolUsage ?? [])
 const events = computed(() => snapshot.value?.events ?? [])
 const activity = computed(() => snapshot.value?.activity ?? [])
-const insights = computed(() => snapshot.value?.insights ?? [])
+const taskStatusGroups = [
+  { key: 'completed', label: '已完成', color: '#10b981', aliases: ['completed', 'success', 'succeeded', 'done'] },
+  { key: 'running', label: '执行中', color: '#2563eb', aliases: ['running', 'in_progress', 'processing'] },
+  { key: 'pending', label: '等待中', color: '#f59e0b', aliases: ['pending', 'queued', 'created', 'waiting'] },
+  { key: 'failed', label: '失败', color: '#ef4444', aliases: ['failed', 'error', 'cancelled', 'canceled'] },
+]
+const rowColors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444']
 
 const totalTokens = computed(() => overview.value?.tokenCount || (overview.value?.inputTokenCount ?? 0) + (overview.value?.outputTokenCount ?? 0))
 const trendMax = computed(() => {
   const values = activitySeries.value.flatMap((item) => [item.modelCalls, item.toolCalls, item.taskCount])
   return Math.max(...values, 1)
 })
-const tokenMax = computed(() => Math.max(...activitySeries.value.map((item) => item.tokenCount), 1))
 
 const activitySeries = computed<DashboardActivityDTO[]>(() => {
   if (activity.value.length) return activity.value
@@ -93,22 +95,6 @@ const kpiCards = computed(() => [
   },
 ])
 
-const trendBars = computed(() => {
-  const width = Math.max(10, (chartWidth - chartPadding * 2) / Math.max(activitySeries.value.length, 1) - 12)
-  return activitySeries.value.map((item, index) => {
-    const step = (chartWidth - chartPadding * 2) / Math.max(activitySeries.value.length - 1, 1)
-    const centerX = activitySeries.value.length === 1 ? chartWidth / 2 : chartPadding + index * step
-    const height = Math.max(4, (item.tokenCount / tokenMax.value) * (chartHeight - chartPadding * 2))
-    return {
-      ...item,
-      x: centerX - width / 2,
-      y: chartHeight - chartPadding - height,
-      width,
-      height,
-    }
-  })
-})
-
 const modelLinePoints = computed(() => pointSeries('modelCalls'))
 const toolLinePoints = computed(() => pointSeries('toolCalls'))
 const taskLinePoints = computed(() => pointSeries('taskCount'))
@@ -129,37 +115,51 @@ const taskStatusItems = computed(() => {
   if (distribution.length) return distribution
   return taskUsage.value.map((item) => ({ label: item.status, value: item.count }))
 })
-const taskTotal = computed(() => taskStatusItems.value.reduce((sum, item) => sum + item.value, 0))
+const taskStatusCards = computed(() =>
+  taskStatusGroups.map((group) => ({
+    ...group,
+    value: taskStatusItems.value.reduce((sum, item) => {
+      const label = String(item.label || '').toLowerCase()
+      return group.aliases.includes(label) ? sum + item.value : sum
+    }, 0),
+  })),
+)
+const taskTotal = computed(() => taskStatusCards.value.reduce((sum, item) => sum + item.value, 0))
+const taskCompletionRate = computed(() => {
+  if (overview.value) return overview.value.taskCompletionRate
+  const completed = taskStatusCards.value.find((item) => item.key === 'completed')?.value ?? 0
+  return taskTotal.value ? completed / taskTotal.value : 0
+})
 const donutStyle = computed(() => {
   if (!taskTotal.value) return { background: 'conic-gradient(#e8eef8 0 100%)' }
   let cursor = 0
-  const segments = taskStatusItems.value.map((item) => {
+  const segments = taskStatusCards.value.map((item) => {
     const start = cursor
     const size = (item.value / taskTotal.value) * 100
     cursor += size
-    return `${statusColor(item.label)} ${start}% ${cursor}%`
+    return `${item.color} ${start}% ${cursor}%`
   })
   return { background: `conic-gradient(${segments.join(', ')})` }
 })
 
 const modelRows = computed(() => {
   const max = Math.max(...modelUsage.value.map((item) => item.callCount), 1)
-  return modelUsage.value.slice(0, 6).map((item) => ({ ...item, width: `${Math.max(4, (item.callCount / max) * 100)}%` }))
+  const total = Math.max(modelUsage.value.reduce((sum, item) => sum + item.callCount, 0), 1)
+  return modelUsage.value.map((item, index) => ({
+    ...item,
+    color: rowColors[index % rowColors.length],
+    share: percentText(item.callCount / total),
+    width: `${Math.max(4, (item.callCount / max) * 100)}%`,
+  }))
 })
 const toolRows = computed(() => {
   const max = Math.max(...toolUsage.value.map((item) => item.callCount), 1)
-  return toolUsage.value.slice(0, 6).map((item) => ({ ...item, width: `${Math.max(4, (item.callCount / max) * 100)}%` }))
+  return toolUsage.value.map((item, index) => ({
+    ...item,
+    color: rowColors[index % rowColors.length],
+    width: `${Math.max(4, (item.callCount / max) * 100)}%`,
+  }))
 })
-const insightCards = computed(() =>
-  insights.value.length
-    ? insights.value
-    : [
-        { label: '任务完成率', value: overview.value?.taskCompletionRate ?? 0, unit: 'ratio', tone: 'success' },
-        { label: '平均延迟', value: overview.value?.averageLatencyMs ?? 0, unit: 'ms', tone: 'brand' },
-        { label: '主力模型', value: modelUsage.value[0]?.modelName || '暂无', unit: 'text', tone: 'brand' },
-        { label: '高频工具', value: toolUsage.value[0]?.toolName || '暂无', unit: 'text', tone: 'success' },
-      ],
-)
 const eventRows = computed(() =>
   events.value.length
     ? events.value
@@ -198,12 +198,6 @@ function latencyText(value: number) {
   return `${Math.round(value)}ms`
 }
 
-function insightValue(value: number | string, unit: string) {
-  if (unit === 'ratio' && typeof value === 'number') return percentText(value)
-  if (unit === 'ms' && typeof value === 'number') return latencyText(value)
-  return String(value || '暂无')
-}
-
 function statusLabel(value: string) {
   const labels: Record<string, string> = {
     completed: '已完成',
@@ -225,19 +219,11 @@ function statusTone(value: string) {
   return 'brand'
 }
 
-function statusColor(value: string) {
-  const tone = statusTone(value)
-  if (tone === 'success') return '#16a34a'
-  if (tone === 'warning') return '#f59e0b'
-  if (tone === 'danger') return '#ef4444'
-  return '#2563eb'
-}
-
-function formatDate(value: string | null) {
+function formatTime(value: string | null) {
   if (!value) return '刚刚'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
 async function loadDashboard() {
@@ -277,7 +263,6 @@ onMounted(loadDashboard)
     <header class="module-header dashboard-header">
       <div>
         <h2>数据看板</h2>
-        <p>聚合模型调用、Token 消耗、工具执行、后台任务和系统事件，持续观察 PaperChatAgent 的运行状态。</p>
       </div>
       <div class="page-actions dashboard-actions">
         <el-select v-model="days" style="width: 150px" @change="changeRange">
@@ -299,20 +284,6 @@ onMounted(loadDashboard)
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon />
 
     <div v-loading="isLoading" class="dashboard-page-stack">
-      <section class="dashboard-hero">
-        <div class="dashboard-hero-copy">
-          <span class="dashboard-eyebrow">PaperChatAgent Observability</span>
-          <h3>运行观测中心</h3>
-          <p>从会话模型、能力调用和后台任务三个维度查看系统负载，定位高频模型、异常任务和工具使用热点。</p>
-        </div>
-        <div class="dashboard-insights">
-          <article v-for="item in insightCards" :key="item.label" class="dashboard-insight" :class="item.tone">
-            <span>{{ item.label }}</span>
-            <strong>{{ insightValue(item.value, item.unit) }}</strong>
-          </article>
-        </div>
-      </section>
-
       <section class="dashboard-kpi-grid">
         <article v-for="card in kpiCards" :key="card.label" class="dashboard-kpi-card" :class="card.tone">
           <div class="dashboard-kpi-icon">
@@ -330,13 +301,18 @@ onMounted(loadDashboard)
         <article class="dashboard-panel dashboard-trend-panel">
           <div class="section-title-row">
             <div>
-              <h3>模型调用趋势</h3>
-              <p>按天对比模型调用、工具调用和任务启动量，Token 消耗作为背景柱展示。</p>
+              <h3>调用趋势</h3>
+              <p>近 {{ days }} 天模型调用、工具调用与任务完成变化</p>
             </div>
-            <el-tag type="info">tokens {{ compactNumber(totalTokens) }}</el-tag>
+            <div class="dashboard-legend">
+              <span><i class="legend-model" />模型</span>
+              <span><i class="legend-tool" />工具</span>
+              <span><i class="legend-task" />任务</span>
+            </div>
           </div>
 
           <div class="dashboard-chart-shell">
+            <span class="dashboard-peak-label">峰值 {{ compactNumber(trendMax) }}</span>
             <svg class="dashboard-trend-svg" :viewBox="`0 0 ${chartWidth} ${chartHeight}`" role="img" aria-label="模型调用趋势">
               <line
                 v-for="index in 4"
@@ -347,30 +323,13 @@ onMounted(loadDashboard)
                 :y2="chartPadding + (index - 1) * ((chartHeight - chartPadding * 2) / 3)"
                 class="dashboard-grid-line"
               />
-              <rect
-                v-for="bar in trendBars"
-                :key="`${bar.label}-tokens`"
-                :x="bar.x"
-                :y="bar.y"
-                :width="bar.width"
-                :height="bar.height"
-                rx="6"
-                class="dashboard-token-bar"
-              />
               <polygon v-if="modelAreaPoints" :points="modelAreaPoints" class="dashboard-area-fill" />
               <polyline :points="modelLinePoints.map((point) => `${point.x},${point.y}`).join(' ')" class="dashboard-line model" />
               <polyline :points="toolLinePoints.map((point) => `${point.x},${point.y}`).join(' ')" class="dashboard-line tool" />
               <polyline :points="taskLinePoints.map((point) => `${point.x},${point.y}`).join(' ')" class="dashboard-line task" />
-              <circle v-for="point in modelLinePoints" :key="`${point.label}-model`" :cx="point.x" :cy="point.y" r="4" class="dashboard-dot model" />
             </svg>
             <div class="dashboard-axis-labels">
               <span v-for="item in axisLabels" :key="item.label">{{ item.label }}</span>
-            </div>
-            <div class="dashboard-legend">
-              <span><i class="legend-model" />模型调用</span>
-              <span><i class="legend-tool" />工具调用</span>
-              <span><i class="legend-task" />任务量</span>
-              <span><i class="legend-token" />Token</span>
             </div>
           </div>
         </article>
@@ -378,24 +337,22 @@ onMounted(loadDashboard)
         <article class="dashboard-panel dashboard-status-panel">
           <div class="section-title-row">
             <div>
-              <h3>任务状态分布</h3>
-              <p>后台研究工作流的当前健康度。</p>
+              <h3>任务状态</h3>
+              <p>Agent 任务队列实时分布</p>
             </div>
-            <el-icon><DataAnalysis /></el-icon>
           </div>
           <div class="dashboard-donut-wrap">
             <div class="dashboard-donut" :style="donutStyle">
               <div>
-                <strong>{{ numberText(taskTotal) }}</strong>
-                <span>任务</span>
+                <strong>{{ percentText(taskCompletionRate) }}</strong>
+                <span>完成率</span>
               </div>
             </div>
             <div class="dashboard-status-list">
-              <div v-for="item in taskStatusItems" :key="item.label" class="dashboard-status-row">
-                <span><i :style="{ background: statusColor(item.label) }" />{{ statusLabel(item.label) }}</span>
+              <div v-for="item in taskStatusCards" :key="item.key" class="dashboard-status-row">
+                <span><i :style="{ background: item.color }" />{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
               </div>
-              <p v-if="!taskStatusItems.length" class="muted-text">暂无任务状态数据。</p>
             </div>
           </div>
         </article>
@@ -405,22 +362,20 @@ onMounted(loadDashboard)
         <article class="dashboard-panel">
           <div class="section-title-row">
             <div>
-              <h3>模型用量排行</h3>
-              <p>按调用次数排序，辅助判断主要成本与延迟来源。</p>
+              <h3>模型调用排行</h3>
+              <p>按最近 {{ days }} 天调用量统计</p>
             </div>
-            <el-icon><Operation /></el-icon>
           </div>
-          <div class="dashboard-rank-list">
+          <div class="dashboard-rank-list dashboard-scroll-area">
             <div v-for="item in modelRows" :key="`${item.modelName}-${item.routeKey}`" class="dashboard-rank-row">
               <div class="dashboard-rank-head">
                 <strong>{{ item.modelName || 'unknown' }}</strong>
-                <span>{{ item.routeKey || item.providerName || 'model' }}</span>
+                <span>{{ numberText(item.callCount) }}</span>
               </div>
-              <div class="dashboard-rank-track"><i :style="{ width: item.width }" /></div>
+              <div class="dashboard-rank-track"><i :style="{ width: item.width, background: item.color }" /></div>
               <div class="dashboard-rank-meta">
-                <span>{{ numberText(item.callCount) }} 次</span>
-                <span>{{ compactNumber(item.totalTokens || item.inputTokens + item.outputTokens) }} tokens</span>
-                <span>{{ latencyText(item.latencyMs) }}</span>
+                <span>{{ item.routeKey || item.providerName || 'model' }}</span>
+                <span>{{ item.share }}</span>
               </div>
             </div>
             <el-empty v-if="!modelRows.length" description="暂无模型调用数据" :image-size="80" />
@@ -430,22 +385,23 @@ onMounted(loadDashboard)
         <article class="dashboard-panel">
           <div class="section-title-row">
             <div>
-              <h3>工具调用</h3>
-              <p>RAG、MCP、Skill 等能力的执行频率与成功率。</p>
+              <h3>工具调用健康度</h3>
+              <p>MCP / Skill / RAG 工具观测</p>
             </div>
-            <el-icon><Connection /></el-icon>
           </div>
-          <div class="dashboard-tool-list">
+          <div class="dashboard-tool-head">
+            <span>工具</span>
+            <span>次数</span>
+            <span>成功率</span>
+          </div>
+          <div class="dashboard-tool-list dashboard-scroll-area">
             <div v-for="item in toolRows" :key="item.toolName" class="dashboard-tool-row">
-              <div>
+              <div class="dashboard-tool-name">
+                <i :style="{ background: item.color }" />
                 <strong>{{ item.toolName }}</strong>
-                <span>{{ item.serviceName }}</span>
               </div>
-              <div class="dashboard-tool-meter"><i :style="{ width: item.width }" /></div>
-              <div class="dashboard-tool-side">
-                <strong>{{ numberText(item.callCount) }}</strong>
-                <span>{{ percentText(item.successRate || 0) }}</span>
-              </div>
+              <span>{{ numberText(item.callCount) }}</span>
+              <strong :class="{ danger: item.successRate < 0.9 }">{{ percentText(item.successRate || 0) }}</strong>
             </div>
             <el-empty v-if="!toolRows.length" description="暂无工具调用数据" :image-size="80" />
           </div>
@@ -454,19 +410,19 @@ onMounted(loadDashboard)
         <article class="dashboard-panel dashboard-events-panel">
           <div class="section-title-row">
             <div>
-              <h3>最近系统事件</h3>
-              <p>任务与工具调用会汇总到这里。</p>
+              <h3>系统事件</h3>
+              <p>最近的会话、Skill 与任务事件</p>
             </div>
-            <el-icon><Warning /></el-icon>
           </div>
-          <div class="dashboard-timeline">
+          <div class="dashboard-timeline dashboard-scroll-area">
             <div v-for="event in eventRows" :key="`${event.title}-${event.createdAt}`" class="dashboard-event-row">
               <i :class="statusTone(event.status)" />
               <div>
+                <span>{{ formatTime(event.createdAt) }}</span>
                 <strong>{{ event.title }}</strong>
                 <p>{{ event.detail }}</p>
-                <span>{{ statusLabel(event.status) }} · {{ formatDate(event.createdAt) }}</span>
               </div>
+              <em :class="statusTone(event.status)">{{ statusLabel(event.status) }}</em>
             </div>
           </div>
         </article>
@@ -889,5 +845,418 @@ onMounted(loadDashboard)
   .dashboard-kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+.page-shell.dashboard-shell {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 48px);
+  overflow: hidden !important;
+  background: #f8fafd;
+}
+
+.dashboard-header {
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 0;
+}
+
+.dashboard-header h2 {
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.dashboard-actions :deep(.el-select .el-select__wrapper),
+.dashboard-actions :deep(.el-button) {
+  min-height: 36px;
+  border-radius: 8px;
+}
+
+.dashboard-page-stack {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 130px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  overflow: hidden;
+}
+
+.dashboard-kpi-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-kpi-card {
+  min-height: 0;
+  height: 130px;
+  align-items: flex-start;
+  padding: 18px 20px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dashboard-kpi-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+}
+
+.dashboard-kpi-card strong {
+  margin-top: 22px;
+  font-size: 28px;
+}
+
+.dashboard-kpi-card p {
+  margin-top: 4px;
+  color: #667085;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.dashboard-kpi-card.info .dashboard-kpi-icon {
+  background: #ecfdf3;
+  color: #10b981;
+}
+
+.dashboard-kpi-card.success .dashboard-kpi-icon {
+  background: #f1e8ff;
+  color: #8b5cf6;
+}
+
+.dashboard-kpi-card.warning .dashboard-kpi-icon {
+  background: #fff7e8;
+  color: #f97316;
+}
+
+.dashboard-main-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.72fr) minmax(330px, 0.78fr);
+  gap: 18px;
+}
+
+.dashboard-detail-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.84fr) minmax(300px, 0.84fr);
+  gap: 18px;
+}
+
+.dashboard-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 22px;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.section-title-row {
+  align-items: flex-start;
+  flex-shrink: 0;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.section-title-row h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.section-title-row p {
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.dashboard-chart-shell {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-top: 18px;
+}
+
+.dashboard-peak-label {
+  position: absolute;
+  top: 0;
+  left: 28px;
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.dashboard-trend-svg {
+  flex: 1;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+
+.dashboard-area-fill {
+  fill: rgba(37, 99, 235, 0.1);
+}
+
+.dashboard-axis-labels {
+  flex-shrink: 0;
+  padding: 0 26px;
+}
+
+.dashboard-legend {
+  margin: 0;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  font-size: 12px;
+}
+
+.legend-token {
+  display: none;
+}
+
+.dashboard-status-panel {
+  min-width: 0;
+}
+
+.dashboard-donut-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(132px, 172px) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.dashboard-donut {
+  width: 172px;
+  height: 172px;
+  box-shadow: inset 0 0 0 14px #edf1f7;
+}
+
+.dashboard-donut > div {
+  width: 108px;
+  height: 108px;
+}
+
+.dashboard-donut strong {
+  font-size: 26px;
+}
+
+.dashboard-status-list {
+  width: 100%;
+  gap: 16px;
+}
+
+.dashboard-status-row {
+  font-size: 14px;
+}
+
+.dashboard-scroll-area {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.dashboard-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dashboard-scroll-area::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d9e2ec;
+}
+
+.dashboard-rank-list {
+  gap: 17px;
+}
+
+.dashboard-rank-row {
+  gap: 8px;
+}
+
+.dashboard-rank-head strong,
+.dashboard-rank-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-rank-head strong {
+  min-width: 0;
+  font-size: 14px;
+}
+
+.dashboard-rank-head span {
+  color: #182230;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dashboard-rank-track {
+  height: 8px;
+}
+
+.dashboard-rank-meta {
+  color: #667085;
+  font-size: 12px;
+}
+
+.dashboard-tool-head,
+.dashboard-tool-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 68px;
+  gap: 10px;
+  align-items: center;
+}
+
+.dashboard-tool-head {
+  flex-shrink: 0;
+  padding: 0 6px 10px 0;
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 700;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.dashboard-tool-list {
+  gap: 0;
+}
+
+.dashboard-tool-row {
+  min-height: 48px;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.dashboard-tool-name {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-tool-name i {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+
+.dashboard-tool-row strong,
+.dashboard-tool-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-tool-row > span {
+  color: #475467;
+  text-align: right;
+}
+
+.dashboard-tool-row > strong {
+  color: #047857;
+  text-align: right;
+}
+
+.dashboard-tool-row > strong.danger {
+  color: #b42318;
+}
+
+.dashboard-timeline {
+  position: relative;
+  gap: 0;
+}
+
+.dashboard-timeline::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 8px;
+  width: 2px;
+  background: #edf1f7;
+}
+
+.dashboard-event-row {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: start;
+  min-height: 58px;
+  padding-bottom: 12px;
+}
+
+.dashboard-event-row > i {
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  border: 3px solid #dbeafe;
+  background: #ffffff;
+}
+
+.dashboard-event-row > i.success {
+  border-color: #bbf7d0;
+}
+
+.dashboard-event-row > i.warning {
+  border-color: #fed7aa;
+}
+
+.dashboard-event-row > i.danger {
+  border-color: #fecaca;
+}
+
+.dashboard-event-row strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #182230;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-event-row p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-event-row em {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 22px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.dashboard-event-row em.success {
+  background: #ecfdf3;
+  color: #047857;
+}
+
+.dashboard-event-row em.warning {
+  background: #fff7e8;
+  color: #b54708;
+}
+
+.dashboard-event-row em.danger {
+  background: #fef3f2;
+  color: #b42318;
 }
 </style>

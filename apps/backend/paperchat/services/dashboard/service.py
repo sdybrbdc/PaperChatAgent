@@ -5,7 +5,11 @@ from typing import Any
 
 from sqlalchemy import case, func, select
 
-from paperchat.database.models.tables import PaperChatResearchTaskRecord, PaperChatToolInvocationLogRecord
+from paperchat.database.models.tables import (
+    PaperChatResearchTaskRecord,
+    PaperChatSkillConfigRecord,
+    PaperChatToolInvocationLogRecord,
+)
 from paperchat.database.sql import db_session
 from paperchat.services.model_router.records import PaperChatModelUsageLogRecord
 
@@ -195,6 +199,7 @@ class DashboardService:
 
     def tool_usage_payload(self, *, user_id: str, days: int = 30) -> dict[str, Any]:
         start_at, end_at = self._range(days)
+        skill_names = self._skill_name_lookup(user_id=user_id)
         with db_session() as session:
             rows = session.execute(
                 select(
@@ -213,9 +218,15 @@ class DashboardService:
             ).all()
         items = [
             {
-                "tool_name": tool_name or "unknown",
-                "service_name": operation or "tool_invocation",
+                "tool_name": self._capability_display_name(
+                    capability_id=str(tool_name or ""),
+                    capability_type=str(operation or ""),
+                    skill_names=skill_names,
+                ),
+                "service_name": self._capability_service_name(capability_type=str(operation or "")),
                 "operation": operation or "tool_invocation",
+                "capability_id": tool_name or "",
+                "capability_type": operation or "tool_invocation",
                 "request_count": int(count or 0),
                 "call_count": int(count or 0),
                 "success_count": int(success or 0),
@@ -363,6 +374,7 @@ class DashboardService:
 
     def _system_events_payload(self, *, user_id: str, start_at: datetime) -> list[dict[str, Any]]:
         events: list[dict[str, Any]] = []
+        skill_names = self._skill_name_lookup(user_id=user_id)
         with db_session() as session:
             task_rows = session.execute(
                 select(
@@ -376,7 +388,7 @@ class DashboardService:
                     PaperChatResearchTaskRecord.updated_at >= start_at,
                 )
                 .order_by(PaperChatResearchTaskRecord.updated_at.desc())
-                .limit(5)
+                .limit(12)
             ).all()
             tool_rows = session.execute(
                 select(
@@ -389,7 +401,7 @@ class DashboardService:
                     PaperChatToolInvocationLogRecord.created_at >= start_at,
                 )
                 .order_by(PaperChatToolInvocationLogRecord.created_at.desc())
-                .limit(5)
+                .limit(12)
             ).all()
         for title, summary, status, updated_at in task_rows:
             events.append(
@@ -402,16 +414,76 @@ class DashboardService:
                 }
             )
         for capability_id, capability_type, created_at in tool_rows:
+            display_name = self._capability_display_name(
+                capability_id=capability_id or "",
+                capability_type=capability_type or "",
+                skill_names=skill_names,
+            )
             events.append(
                 {
                     "event_type": "tool",
-                    "title": f"工具调用：{capability_id or 'unknown'}",
-                    "detail": capability_type or "tool_invocation",
+                    "title": f"{self._capability_event_prefix(capability_type or '')}：{display_name}",
+                    "detail": self._capability_service_name(capability_type=str(capability_type or "")),
                     "status": "recorded",
                     "created_at": created_at.isoformat() if created_at else None,
                 }
             )
-        return sorted(events, key=lambda item: item.get("created_at") or "", reverse=True)[:8]
+        return sorted(events, key=lambda item: item.get("created_at") or "", reverse=True)[:24]
+
+    def _skill_name_lookup(self, *, user_id: str) -> dict[str, str]:
+        with db_session() as session:
+            rows = session.execute(
+                select(
+                    PaperChatSkillConfigRecord.id,
+                    PaperChatSkillConfigRecord.name,
+                    PaperChatSkillConfigRecord.manifest_json,
+                ).where(PaperChatSkillConfigRecord.user_id == user_id)
+            ).all()
+        names: dict[str, str] = {}
+        for skill_id, name, manifest in rows:
+            manifest_name = ""
+            if isinstance(manifest, dict):
+                manifest_name = str(manifest.get("name") or "").strip()
+            display_name = manifest_name or str(name or "").strip()
+            if display_name:
+                names[str(skill_id)] = display_name
+        return names
+
+    def _capability_display_name(
+        self,
+        *,
+        capability_id: str,
+        capability_type: str,
+        skill_names: dict[str, str],
+    ) -> str:
+        if capability_type == "skill":
+            skill_id = capability_id.removeprefix("skill.") if capability_id.startswith("skill.") else capability_id
+            return skill_names.get(skill_id) or skill_id or "unknown"
+        if capability_type == "rag":
+            return "知识库检索"
+        if capability_type == "agent":
+            return capability_id.removeprefix("agent.workflow.") or capability_id or "unknown"
+        if capability_id.startswith("mcp."):
+            return capability_id.split(".")[-1] or capability_id
+        return capability_id or "unknown"
+
+    def _capability_service_name(self, *, capability_type: str) -> str:
+        labels = {
+            "skill": "Agent Skill",
+            "mcp": "MCP 服务",
+            "rag": "RAG 检索",
+            "agent": "Agent 工作流",
+        }
+        return labels.get(capability_type, capability_type or "tool_invocation")
+
+    def _capability_event_prefix(self, capability_type: str) -> str:
+        labels = {
+            "skill": "Skill 调用",
+            "mcp": "MCP 调用",
+            "rag": "RAG 检索",
+            "agent": "Agent 调用",
+        }
+        return labels.get(capability_type, "工具调用")
 
 
 dashboard_service = DashboardService()
