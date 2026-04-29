@@ -37,7 +37,7 @@ class TaskService:
         max_papers: int,
         start_background: bool,
     ) -> dict[str, Any]:
-        return await agent_service.create_run_payload(
+        run_payload = await agent_service.create_run_payload(
             user_id=user_id,
             workflow_id=workflow_id,
             topic=topic,
@@ -45,6 +45,10 @@ class TaskService:
             max_papers=max_papers,
             start_background=start_background,
         )
+        task_id = str(run_payload.get("task_id") or "")
+        if task_id:
+            return self.get_task_payload(user_id=user_id, task_id=task_id)
+        return run_payload
 
     def list_tasks_payload(
         self,
@@ -79,11 +83,7 @@ class TaskService:
 
     def get_task_payload(self, *, user_id: str, task_id: str) -> dict[str, Any]:
         task, run = self._require_task_with_run(user_id=user_id, task_id=task_id)
-        if run is None:
-            return self._task_payload(task, run=None, include_nodes=True)
-        payload = agent_service.get_run_payload(user_id=user_id, run_id=run.id)
-        payload["task"] = self._task_payload(task, run=run)
-        return payload
+        return self._task_payload(task, run=run, include_nodes=True, include_artifacts=True, include_run=True)
 
     def cancel_task_payload(self, *, user_id: str, task_id: str) -> dict[str, Any]:
         task, run = self._require_task_with_run(user_id=user_id, task_id=task_id)
@@ -162,11 +162,15 @@ class TaskService:
         *,
         run: PaperChatWorkflowRunRecord | None,
         include_nodes: bool = False,
+        include_artifacts: bool = False,
+        include_run: bool = False,
     ) -> dict[str, Any]:
+        workflow = agent_repository.get_workflow(task.workflow_id)
         payload = {
             "id": task.id,
             "run_id": run.id if run else None,
             "workflow_id": task.workflow_id,
+            "workflow_name": workflow.name if workflow else "",
             "conversation_id": task.conversation_id,
             "title": task.title,
             "status": task.status,
@@ -175,9 +179,15 @@ class TaskService:
             "summary": task.summary,
             "failed_reason": task.failed_reason,
             "detail_url": f"/tasks/{task.id}",
+            "payload": run.input_json if run else {},
+            "input": run.input_json if run else {},
+            "output": run.output_json if run else {},
+            "error": run.error_json if run else {},
             "created_at": _dt(task.created_at),
             "updated_at": _dt(task.updated_at),
+            "started_at": _dt(run.started_at) if run else None,
             "completed_at": _dt(task.completed_at),
+            "agent_detail_url": f"/agents/runs/{run.id}" if run else "",
         }
         if run:
             payload.update(
@@ -215,6 +225,42 @@ class TaskService:
                 }
                 for node in nodes
             ]
+        elif include_nodes:
+            payload["nodes"] = []
+        if include_artifacts:
+            artifacts = agent_repository.list_artifacts(task_id=task.id)
+            payload["artifacts"] = [
+                {
+                    "id": artifact.id,
+                    "task_id": artifact.task_id,
+                    "workflow_run_id": artifact.workflow_run_id,
+                    "artifact_type": artifact.artifact_type,
+                    "title": artifact.title,
+                    "content": artifact.content_text,
+                    "uri": (artifact.metadata_json or {}).get("uri", ""),
+                    "metadata": artifact.metadata_json or {},
+                    "created_at": _dt(artifact.created_at),
+                }
+                for artifact in artifacts
+            ]
+        if include_run and run:
+            payload["workflow_run"] = {
+                "id": run.id,
+                "task_id": run.task_id,
+                "workflow_id": run.workflow_id,
+                "conversation_id": run.conversation_id,
+                "status": run.status,
+                "current_node": run.current_node,
+                "input": run.input_json or {},
+                "output": run.output_json or {},
+                "error": run.error_json or {},
+                "started_at": _dt(run.started_at),
+                "completed_at": _dt(run.completed_at),
+                "created_at": _dt(run.created_at),
+                "updated_at": _dt(run.updated_at),
+            }
+        elif include_run:
+            payload["workflow_run"] = None
         return payload
 
 

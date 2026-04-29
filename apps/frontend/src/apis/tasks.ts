@@ -19,6 +19,7 @@ function normalizeTask(value: unknown): TaskDTO {
   const data = record(value)
   return {
     id: String(data.id ?? ''),
+    runId: (data.run_id as string | null | undefined) ?? (data.runId as string | null | undefined) ?? null,
     title: String(data.title ?? ''),
     status: String(data.status ?? 'pending'),
     progress: Number(data.progress ?? 0),
@@ -28,7 +29,12 @@ function normalizeTask(value: unknown): TaskDTO {
     currentNode: String(data.current_node ?? data.currentNode ?? ''),
     summary: String(data.summary ?? ''),
     failedReason: String(data.failed_reason ?? data.failedReason ?? ''),
+    detailUrl: String(data.detail_url ?? data.detailUrl ?? ''),
+    agentDetailUrl: String(data.agent_detail_url ?? data.agentDetailUrl ?? ''),
     payload: record(data.payload),
+    input: record(data.input),
+    output: record(data.output),
+    error: record(data.error),
     createdAt: (data.created_at as string | null | undefined) ?? (data.createdAt as string | null | undefined) ?? null,
     updatedAt: (data.updated_at as string | null | undefined) ?? (data.updatedAt as string | null | undefined) ?? null,
     startedAt: (data.started_at as string | null | undefined) ?? (data.startedAt as string | null | undefined) ?? null,
@@ -41,11 +47,13 @@ function normalizeNode(value: unknown): TaskNodeRunDTO {
   return {
     id: String(data.id ?? ''),
     nodeId: String(data.node_id ?? data.nodeId ?? ''),
+    parentNodeId: String(data.parent_node_id ?? data.parentNodeId ?? ''),
     title: String(data.title ?? data.node_title ?? ''),
     status: String(data.status ?? 'pending'),
     progress: Number(data.progress ?? 0),
     detail: String(data.detail ?? ''),
     errorText: String(data.error_text ?? data.errorText ?? ''),
+    sortOrder: Number(data.sort_order ?? data.sortOrder ?? 0),
     startedAt: (data.started_at as string | null | undefined) ?? (data.startedAt as string | null | undefined) ?? null,
     completedAt: (data.completed_at as string | null | undefined) ?? (data.completedAt as string | null | undefined) ?? null,
   }
@@ -60,13 +68,14 @@ function normalizeArtifact(value: unknown): TaskArtifactDTO {
     title: String(data.title ?? ''),
     content: String(data.content ?? ''),
     uri: String(data.uri ?? ''),
+    metadata: record(data.metadata),
     createdAt: (data.created_at as string | null | undefined) ?? (data.createdAt as string | null | undefined) ?? null,
   }
 }
 
 function normalizeDetail(value: unknown): TaskDetailDTO {
   const data = record(value)
-  const task = normalizeTask(value)
+  const task = normalizeTask(data.task ? { ...data, ...record(data.task) } : value)
   return {
     ...task,
     nodes: list(data.nodes ?? data.node_runs).map(normalizeNode),

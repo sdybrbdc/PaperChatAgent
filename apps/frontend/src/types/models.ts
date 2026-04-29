@@ -1,10 +1,13 @@
 export interface ModelProviderDTO {
   id: string
   name: string
+  providerKey: string
   providerType: string
   baseUrl: string
+  apiKeyRef: string
   status: string
   modelCount: number
+  config: Record<string, unknown>
   createdAt: string | null
   updatedAt: string | null
 }
@@ -16,6 +19,9 @@ export interface ModelRouteDTO {
   providerId: string
   providerName: string
   modelName: string
+  modelType: string
+  priority: number
+  isDefault: boolean
   temperature: number
   maxTokens: number
   status: string

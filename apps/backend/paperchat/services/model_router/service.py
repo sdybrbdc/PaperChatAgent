@@ -9,7 +9,7 @@ from paperchat.services.model_router.repository import model_router_repository
 
 
 class ModelRouterService:
-    def _provider_payload(self, provider) -> dict[str, Any]:
+    def _provider_payload(self, provider, *, model_count: int | None = None) -> dict[str, Any]:
         metadata = provider.metadata_json or {}
         return {
             "id": provider.id,
@@ -19,17 +19,18 @@ class ModelRouterService:
             "base_url": provider.base_url,
             "api_key_ref": provider.api_key_secret_ref,
             "status": provider.status,
+            "model_count": int(model_count if model_count is not None else metadata.get("model_count") or 0),
             "config": metadata,
             "created_at": provider.created_at.isoformat() if provider.created_at else None,
             "updated_at": provider.updated_at.isoformat() if provider.updated_at else None,
         }
 
-    def _route_payload(self, route) -> dict[str, Any]:
+    def _route_payload(self, route, *, provider=None) -> dict[str, Any]:
         config = route.config_json or {}
         return {
             "id": route.id,
             "provider_id": route.provider_id,
-            "provider_name": config.get("provider_name", ""),
+            "provider_name": provider.display_name if provider else config.get("provider_name", ""),
             "name": config.get("display_name") or route.route_key,
             "label": config.get("display_name") or route.route_key,
             "route_key": route.route_key,
@@ -73,7 +74,13 @@ class ModelRouterService:
 
     def list_providers_payload(self, *, user_id: str) -> dict[str, Any]:
         model_router_repository.ensure_default_configuration(user_id=user_id)
-        return {"items": [self._provider_payload(item) for item in model_router_repository.list_providers(user_id=user_id)]}
+        providers = model_router_repository.list_providers(user_id=user_id)
+        routes = model_router_repository.list_routes(user_id=user_id)
+        counts: dict[str, int] = {}
+        for route in routes:
+            if route.status != "deleted":
+                counts[route.provider_id] = counts.get(route.provider_id, 0) + 1
+        return {"items": [self._provider_payload(item, model_count=counts.get(item.id, 0)) for item in providers]}
 
     def create_provider_payload(self, *, user_id: str, payload) -> dict[str, Any]:
         provider = model_router_repository.create_provider(user_id=user_id, payload=payload)
@@ -83,7 +90,12 @@ class ModelRouterService:
         provider = model_router_repository.get_provider(user_id=user_id, provider_id=provider_id)
         if provider is None:
             raise AppError(status_code=404, code="MODEL_PROVIDER_NOT_FOUND", message="模型供应商不存在")
-        return self._provider_payload(provider)
+        model_count = sum(
+            1
+            for route in model_router_repository.list_routes(user_id=user_id)
+            if route.provider_id == provider.id and route.status != "deleted"
+        )
+        return self._provider_payload(provider, model_count=model_count)
 
     def update_provider_payload(self, *, user_id: str, provider_id: str, payload) -> dict[str, Any]:
         changes = payload.model_dump(exclude_unset=True)
@@ -104,20 +116,27 @@ class ModelRouterService:
 
     def list_routes_payload(self, *, user_id: str) -> dict[str, Any]:
         model_router_repository.ensure_default_configuration(user_id=user_id)
-        return {"items": [self._route_payload(item) for item in model_router_repository.list_routes(user_id=user_id)]}
+        providers = {item.id: item for item in model_router_repository.list_providers(user_id=user_id)}
+        return {
+            "items": [
+                self._route_payload(item, provider=providers.get(item.provider_id))
+                for item in model_router_repository.list_routes(user_id=user_id)
+            ]
+        }
 
     def create_route_payload(self, *, user_id: str, payload) -> dict[str, Any]:
         provider = model_router_repository.get_provider(user_id=user_id, provider_id=payload.provider_id)
         if provider is None:
             raise AppError(status_code=404, code="MODEL_PROVIDER_NOT_FOUND", message="模型供应商不存在")
         route = model_router_repository.create_route(user_id=user_id, payload=payload)
-        return self._route_payload(route)
+        return self._route_payload(route, provider=provider)
 
     def get_route_payload(self, *, user_id: str, route_id: str) -> dict[str, Any]:
         route = model_router_repository.get_route(user_id=user_id, route_id=route_id)
         if route is None:
             raise AppError(status_code=404, code="MODEL_ROUTE_NOT_FOUND", message="模型路由不存在")
-        return self._route_payload(route)
+        provider = model_router_repository.get_provider(user_id=user_id, provider_id=route.provider_id)
+        return self._route_payload(route, provider=provider)
 
     def update_route_payload(self, *, user_id: str, route_id: str, payload) -> dict[str, Any]:
         changes = payload.model_dump(exclude_unset=True)
@@ -128,7 +147,8 @@ class ModelRouterService:
         route = model_router_repository.update_route(user_id=user_id, route_id=route_id, changes=changes)
         if route is None:
             raise AppError(status_code=404, code="MODEL_ROUTE_NOT_FOUND", message="模型路由不存在")
-        return self._route_payload(route)
+        provider = model_router_repository.get_provider(user_id=user_id, provider_id=route.provider_id)
+        return self._route_payload(route, provider=provider)
 
     def delete_route_payload(self, *, user_id: str, route_id: str) -> dict[str, Any]:
         route = model_router_repository.update_route(
@@ -171,7 +191,7 @@ class ModelRouterService:
             "output_tokens": 1,
             "message": "模型连通性测试占位成功，未请求真实模型 API",
             "provider": self._provider_payload(provider),
-            "route": self._route_payload(route),
+            "route": self._route_payload(route, provider=provider),
             "usage": usage,
         }
 

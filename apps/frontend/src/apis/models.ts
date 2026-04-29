@@ -26,10 +26,13 @@ function normalizeProvider(value: unknown): ModelProviderDTO {
   return {
     id: String(data.id ?? ''),
     name: String(data.name ?? ''),
+    providerKey: String(data.provider_key ?? data.providerKey ?? ''),
     providerType: String(data.provider_type ?? data.providerType ?? ''),
     baseUrl: String(data.base_url ?? data.baseUrl ?? ''),
+    apiKeyRef: String(data.api_key_ref ?? data.apiKeyRef ?? ''),
     status: String(data.status ?? 'enabled'),
     modelCount: Number(data.model_count ?? data.modelCount ?? 0),
+    config: record(data.config),
     createdAt: (data.created_at as string | null | undefined) ?? (data.createdAt as string | null | undefined) ?? null,
     updatedAt: (data.updated_at as string | null | undefined) ?? (data.updatedAt as string | null | undefined) ?? null,
   }
@@ -44,6 +47,9 @@ function normalizeRoute(value: unknown): ModelRouteDTO {
     providerId: String(data.provider_id ?? data.providerId ?? ''),
     providerName: String(data.provider_name ?? data.providerName ?? ''),
     modelName: String(data.model_name ?? data.modelName ?? ''),
+    modelType: String(data.model_type ?? data.modelType ?? record(data.config).model_type ?? 'chat'),
+    priority: Number(data.priority ?? record(data.config).priority ?? 100),
+    isDefault: Boolean(data.is_default ?? data.isDefault ?? record(data.config).is_default ?? false),
     temperature: Number(data.temperature ?? 0),
     maxTokens: Number(data.max_tokens ?? data.maxTokens ?? 0),
     status: String(data.status ?? 'enabled'),

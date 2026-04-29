@@ -1,5 +1,6 @@
 export interface TaskDTO {
   id: string
+  runId: string | null
   title: string
   status: string
   progress: number
@@ -9,7 +10,12 @@ export interface TaskDTO {
   currentNode: string
   summary: string
   failedReason: string
+  detailUrl: string
+  agentDetailUrl: string
   payload: Record<string, unknown>
+  input: Record<string, unknown>
+  output: Record<string, unknown>
+  error: Record<string, unknown>
   createdAt: string | null
   updatedAt: string | null
   startedAt: string | null
@@ -19,11 +25,13 @@ export interface TaskDTO {
 export interface TaskNodeRunDTO {
   id: string
   nodeId: string
+  parentNodeId: string
   title: string
   status: string
   progress: number
   detail: string
   errorText: string
+  sortOrder: number
   startedAt: string | null
   completedAt: string | null
 }
@@ -35,6 +43,7 @@ export interface TaskArtifactDTO {
   title: string
   content: string
   uri: string
+  metadata: Record<string, unknown>
   createdAt: string | null
 }
 
