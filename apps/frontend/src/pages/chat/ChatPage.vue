@@ -99,3 +99,98 @@ async function handleComposerKeydown(event: KeyboardEvent) {
     </div>
   </section>
 </template>
+
+<style lang="scss" scoped>
+.page-shell {
+  height: calc(100vh - 48px);
+  padding: 24px 28px 28px;
+  border-radius: 28px;
+  border: 1px solid var(--pc-border);
+  background: var(--pc-surface);
+  box-shadow: var(--pc-shadow);
+  overflow: hidden;
+
+  &:not(.chat-page-shell) {
+    overflow-y: auto;
+  }
+}
+
+.chat-page-shell {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-header-fixed {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+
+  h2 {
+    margin: 0;
+    font-size: 28px;
+  }
+
+  p {
+    max-width: 640px;
+    margin: 8px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 15px;
+  }
+}
+
+.page-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.chat-content-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(280px, 3fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+  gap: 20px;
+}
+
+.chat-main-scroll {
+  min-height: 0;
+  overflow: hidden;
+  background: var(--pc-surface-soft);
+  border: 1px solid var(--pc-border);
+  border-radius: 22px;
+  padding: 20px;
+}
+
+.message-viewport {
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.message-list {
+  display: grid;
+  gap: 18px;
+}
+
+.chat-composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  grid-column: 1 / span 2;
+  grid-row: 2;
+  margin-top: 0;
+}
+
+.composer-input {
+  flex: 1;
+  color: var(--pc-text-muted);
+}
+</style>

@@ -2701,79 +2701,11 @@
           "width": 1092,
           "height": 932,
           "fill": "$color.panel.bg",
-          "layout": "none",
+          "layout": "vertical",
           "children": [
-            {
-              "type": "text",
-              "id": "skills-title",
-              "x": 28,
-              "y": 22,
-              "fill": "$color.text.primary",
-              "content": "Skills",
-              "fontFamily": "Inter",
-              "fontSize": 28,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "text",
-              "id": "skills-subtitle",
-              "x": 28,
-              "y": 60,
-              "fill": "$color.text.muted",
-              "textGrowth": "fixed-width",
-              "width": 650,
-              "content": "维护可供模型按需调用的技能集合，覆盖论文检索、文档处理、引用锚定与主题分析。",
-              "fontFamily": "Inter",
-              "fontSize": 15,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "rectangle",
-              "cornerRadius": 8,
-              "id": "skills-action-1-bg",
-              "x": 780,
-              "y": 22,
-              "fill": "$color.panel.soft",
-              "width": 140,
-              "height": 36
-            },
-            {
-              "type": "text",
-              "id": "skills-action-1",
-              "x": 804,
-              "y": 33,
-              "fill": "$color.text.secondary",
-              "content": "导入本地 Skills",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "rectangle",
-              "cornerRadius": 8,
-              "id": "skills-action-2-bg",
-              "x": 934,
-              "y": 22,
-              "fill": "$color.brand",
-              "width": 130,
-              "height": 36
-            },
-            {
-              "type": "text",
-              "id": "skills-action-2",
-              "x": 960,
-              "y": 33,
-              "fill": "#FFFFFF",
-              "content": "新增 Skill",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "normal"
-            },
             {
               "type": "frame",
               "id": "skills-stat-enabled",
-              "x": 28,
-              "y": 104,
               "width": 164,
               "height": 88,
               "fill": "$color.success.soft",
@@ -2806,8 +2738,6 @@
             {
               "type": "frame",
               "id": "skills-stat-category",
-              "x": 210,
-              "y": 104,
               "width": 164,
               "height": 88,
               "fill": "$color.panel.accent",
@@ -2840,8 +2770,6 @@
             {
               "type": "frame",
               "id": "skills-stat-draft",
-              "x": 392,
-              "y": 104,
               "width": 164,
               "height": 88,
               "fill": "$color.warning.soft",
@@ -2874,8 +2802,6 @@
             {
               "type": "frame",
               "id": "skills-list-panel",
-              "x": 28,
-              "y": 214,
               "width": 724,
               "height": 676,
               "fill": "$color.panel.soft",
@@ -3111,8 +3037,6 @@
             {
               "type": "frame",
               "id": "skills-detail-card",
-              "x": 780,
-              "y": 214,
               "width": 284,
               "height": 180,
               "fill": "$color.panel.soft",
@@ -3147,8 +3071,6 @@
             {
               "type": "frame",
               "id": "skills-scenario-card",
-              "x": 780,
-              "y": 418,
               "width": 284,
               "height": 220,
               "fill": "$color.panel.soft",
@@ -3183,8 +3105,6 @@
             {
               "type": "frame",
               "id": "skills-guide-card",
-              "x": 780,
-              "y": 662,
               "width": 284,
               "height": 228,
               "fill": "$color.panel.soft",
@@ -3213,6 +3133,124 @@
                   "fontFamily": "Inter",
                   "fontSize": 15,
                   "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lwPKq",
+              "name": "skillsHeader",
+              "width": "fill_container",
+              "padding": [
+                22,
+                28
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ACZFp",
+                  "name": "skillsTitleGroup",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "skills-title",
+                      "fill": "$color.text.primary",
+                      "content": "Skills",
+                      "fontFamily": "Inter",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "skills-subtitle",
+                      "fill": "$color.text.muted",
+                      "textGrowth": "fixed-width",
+                      "width": 650,
+                      "content": "维护可供模型按需调用的技能集合，覆盖论文检索、文档处理、引用锚定与主题分析。",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "u35kmd",
+                  "name": "skillsBtnGroup",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "D8Gqg",
+                      "name": "btn1",
+                      "width": 140,
+                      "height": 36,
+                      "fill": "$color.panel.soft",
+                      "cornerRadius": 8,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 8,
+                          "id": "skills-action-1-bg",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "$color.panel.soft",
+                          "width": 140,
+                          "height": 36
+                        },
+                        {
+                          "type": "text",
+                          "id": "skills-action-1",
+                          "x": 294,
+                          "y": 8,
+                          "fill": "$color.text.secondary",
+                          "content": "导入本地 Skills",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w4v2Pr",
+                      "name": "btn2",
+                      "width": 130,
+                      "height": 36,
+                      "fill": "$color.brand",
+                      "cornerRadius": 8,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 8,
+                          "id": "skills-action-2-bg",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "$color.brand",
+                          "width": 130,
+                          "height": 36
+                        },
+                        {
+                          "type": "text",
+                          "id": "skills-action-2",
+                          "x": 142,
+                          "y": 8,
+                          "fill": "#FFFFFF",
+                          "content": "新增 Skill",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }
@@ -3396,79 +3434,11 @@
           "width": 1092,
           "height": 932,
           "fill": "$color.panel.bg",
-          "layout": "none",
+          "layout": "vertical",
           "children": [
-            {
-              "type": "text",
-              "id": "mcp-title",
-              "x": 28,
-              "y": 22,
-              "fill": "$color.text.primary",
-              "content": "MCP 服务",
-              "fontFamily": "Inter",
-              "fontSize": 28,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "text",
-              "id": "mcp-subtitle",
-              "x": 28,
-              "y": 60,
-              "fill": "$color.text.muted",
-              "textGrowth": "fixed-width",
-              "width": 640,
-              "content": "管理本地与远程工具接入，决定聊天阶段可被模型调用的外部能力范围。",
-              "fontFamily": "Inter",
-              "fontSize": 15,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "rectangle",
-              "cornerRadius": 8,
-              "id": "mcp-action-1-bg",
-              "x": 794,
-              "y": 22,
-              "fill": "$color.panel.soft",
-              "width": 126,
-              "height": 36
-            },
-            {
-              "type": "text",
-              "id": "mcp-action-1",
-              "x": 822,
-              "y": 33,
-              "fill": "$color.text.secondary",
-              "content": "导入本地服务",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "rectangle",
-              "cornerRadius": 8,
-              "id": "mcp-action-2-bg",
-              "x": 934,
-              "y": 22,
-              "fill": "$color.brand",
-              "width": 130,
-              "height": 36
-            },
-            {
-              "type": "text",
-              "id": "mcp-action-2",
-              "x": 964,
-              "y": 33,
-              "fill": "#FFFFFF",
-              "content": "新增服务配置",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "normal"
-            },
             {
               "type": "frame",
               "id": "mcp-stat-online",
-              "x": 28,
-              "y": 104,
               "width": 164,
               "height": 88,
               "fill": "$color.success.soft",
@@ -3501,8 +3471,6 @@
             {
               "type": "frame",
               "id": "mcp-stat-pending",
-              "x": 210,
-              "y": 104,
               "width": 164,
               "height": 88,
               "fill": "$color.warning.soft",
@@ -3535,8 +3503,6 @@
             {
               "type": "frame",
               "id": "mcp-stat-error",
-              "x": 392,
-              "y": 104,
               "width": 164,
               "height": 88,
               "fill": "$color.danger.soft",
@@ -3569,8 +3535,6 @@
             {
               "type": "frame",
               "id": "mcp-list-panel",
-              "x": 28,
-              "y": 214,
               "width": 724,
               "height": 676,
               "fill": "$color.panel.soft",
@@ -3796,8 +3760,6 @@
             {
               "type": "frame",
               "id": "mcp-detail-card",
-              "x": 780,
-              "y": 214,
               "width": 284,
               "height": 176,
               "fill": "$color.panel.soft",
@@ -3832,8 +3794,6 @@
             {
               "type": "frame",
               "id": "mcp-capability-card",
-              "x": 780,
-              "y": 414,
               "width": 284,
               "height": 216,
               "fill": "$color.panel.soft",
@@ -3868,8 +3828,6 @@
             {
               "type": "frame",
               "id": "mcp-flow-card",
-              "x": 780,
-              "y": 654,
               "width": 284,
               "height": 236,
               "fill": "$color.panel.soft",
@@ -3898,6 +3856,124 @@
                   "fontFamily": "Inter",
                   "fontSize": 15,
                   "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "E6mmPf",
+              "name": "mcpHeader",
+              "width": "fill_container",
+              "padding": [
+                22,
+                28
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "f4yAt",
+                  "name": "mcpTitleGroup",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "mcp-title",
+                      "fill": "$color.text.primary",
+                      "content": "MCP 服务",
+                      "fontFamily": "Inter",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "mcp-subtitle",
+                      "fill": "$color.text.muted",
+                      "textGrowth": "fixed-width",
+                      "width": 640,
+                      "content": "管理本地与远程工具接入，决定聊天阶段可被模型调用的外部能力范围。",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "u6tY9",
+                  "name": "mcpBtnGroup",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "uY8TW",
+                      "name": "mcpBtn1",
+                      "width": 126,
+                      "height": 36,
+                      "fill": "$color.panel.soft",
+                      "cornerRadius": 8,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 8,
+                          "id": "mcp-action-1-bg",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "$color.panel.soft",
+                          "width": 126,
+                          "height": 36
+                        },
+                        {
+                          "type": "text",
+                          "id": "mcp-action-1",
+                          "x": 0,
+                          "y": 36,
+                          "fill": "$color.text.secondary",
+                          "content": "导入本地服务",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "aUneL",
+                      "name": "mcpBtn2",
+                      "width": 130,
+                      "height": 36,
+                      "fill": "$color.brand",
+                      "cornerRadius": 8,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 8,
+                          "id": "mcp-action-2-bg",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "$color.brand",
+                          "width": 130,
+                          "height": 36
+                        },
+                        {
+                          "type": "text",
+                          "id": "mcp-action-2",
+                          "x": 0,
+                          "y": 36,
+                          "fill": "#FFFFFF",
+                          "content": "新增服务配置",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }
@@ -4081,79 +4157,11 @@
           "width": 1092,
           "height": 932,
           "fill": "$color.panel.bg",
-          "layout": "none",
+          "layout": "vertical",
           "children": [
-            {
-              "type": "text",
-              "id": "models-title",
-              "x": 28,
-              "y": 22,
-              "fill": "$color.text.primary",
-              "content": "模型",
-              "fontFamily": "Inter",
-              "fontSize": 28,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "text",
-              "id": "models-subtitle",
-              "x": 28,
-              "y": 60,
-              "fill": "$color.text.muted",
-              "textGrowth": "fixed-width",
-              "width": 660,
-              "content": "配置逻辑模型槽位与供应商路由，为对话、工具调用、推理和检索链路提供统一的模型基础设施。",
-              "fontFamily": "Inter",
-              "fontSize": 15,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "rectangle",
-              "cornerRadius": 8,
-              "id": "models-action-1-bg",
-              "x": 798,
-              "y": 22,
-              "fill": "$color.panel.soft",
-              "width": 120,
-              "height": 36
-            },
-            {
-              "type": "text",
-              "id": "models-action-1",
-              "x": 826,
-              "y": 33,
-              "fill": "$color.text.secondary",
-              "content": "新增供应商",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "normal"
-            },
-            {
-              "type": "rectangle",
-              "cornerRadius": 8,
-              "id": "models-action-2-bg",
-              "x": 932,
-              "y": 22,
-              "fill": "$color.brand",
-              "width": 132,
-              "height": 36
-            },
-            {
-              "type": "text",
-              "id": "models-action-2",
-              "x": 956,
-              "y": 33,
-              "fill": "#FFFFFF",
-              "content": "保存路由配置",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "normal"
-            },
             {
               "type": "frame",
               "id": "models-slot-panel",
-              "x": 28,
-              "y": 104,
               "width": 724,
               "height": 786,
               "fill": "$color.panel.soft",
@@ -4506,8 +4514,6 @@
             {
               "type": "frame",
               "id": "models-route-card",
-              "x": 780,
-              "y": 104,
               "width": 284,
               "height": 196,
               "fill": "$color.panel.soft",
@@ -4542,8 +4548,6 @@
             {
               "type": "frame",
               "id": "models-health-card",
-              "x": 780,
-              "y": 324,
               "width": 284,
               "height": 228,
               "fill": "$color.panel.soft",
@@ -4578,8 +4582,6 @@
             {
               "type": "frame",
               "id": "models-policy-card",
-              "x": 780,
-              "y": 576,
               "width": 284,
               "height": 314,
               "fill": "$color.panel.soft",
@@ -4608,6 +4610,124 @@
                   "fontFamily": "Inter",
                   "fontSize": 15,
                   "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IDHjf",
+              "name": "modelsHeader",
+              "width": "fill_container",
+              "padding": [
+                22,
+                28
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yMHZC",
+                  "name": "modelsTitleGroup",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "models-title",
+                      "fill": "$color.text.primary",
+                      "content": "模型",
+                      "fontFamily": "Inter",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "models-subtitle",
+                      "fill": "$color.text.muted",
+                      "textGrowth": "fixed-width",
+                      "width": 660,
+                      "content": "配置逻辑模型槽位与供应商路由，为对话、工具调用、推理和检索链路提供统一的模型基础设施。",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bfUjK",
+                  "name": "modelsBtnGroup",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "s5Njtq",
+                      "name": "modelsBtn1",
+                      "width": 120,
+                      "height": 36,
+                      "fill": "$color.panel.soft",
+                      "cornerRadius": 8,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 8,
+                          "id": "models-action-1-bg",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "$color.panel.soft",
+                          "width": 120,
+                          "height": 36
+                        },
+                        {
+                          "type": "text",
+                          "id": "models-action-1",
+                          "x": 0,
+                          "y": 36,
+                          "fill": "$color.text.secondary",
+                          "content": "新增供应商",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x8dE8",
+                      "name": "modelsBtn2",
+                      "width": 132,
+                      "height": 36,
+                      "fill": "$color.brand",
+                      "cornerRadius": 8,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "cornerRadius": 8,
+                          "id": "models-action-2-bg",
+                          "x": 0,
+                          "y": 0,
+                          "fill": "$color.brand",
+                          "width": 132,
+                          "height": 36
+                        },
+                        {
+                          "type": "text",
+                          "id": "models-action-2",
+                          "x": 0,
+                          "y": 36,
+                          "fill": "#FFFFFF",
+                          "content": "保存路由配置",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }

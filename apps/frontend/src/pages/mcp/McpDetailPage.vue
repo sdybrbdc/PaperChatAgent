@@ -390,3 +390,193 @@ onMounted(loadDetail)
     </el-dialog>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.module-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+
+  h2 {
+    margin: 0;
+    font-size: 28px;
+  }
+
+  p {
+    max-width: 640px;
+    margin: 8px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 15px;
+  }
+}
+
+.page-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.mcp-detail-grid {
+  flex: 1;
+  min-height: 0;
+}
+
+.mcp-detail-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.mcp-detail-body > .metrics-grid {
+  flex-shrink: 0;
+}
+
+.mcp-detail-grid .module-surface {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.mcp-detail-grid .module-rail {
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.mcp-detail-grid .module-rail-card {
+  min-width: 0;
+}
+
+.mcp-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--pc-brand);
+  cursor: pointer;
+}
+
+.mcp-metric-text {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 22px !important;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-tool-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  flex: 1;
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mcp-tool-list {
+  display: grid;
+  align-content: start;
+  height: 100%;
+  min-height: 0;
+  gap: 14px;
+  padding-right: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.mcp-tool-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid var(--pc-border);
+  border-radius: 16px;
+  background: var(--pc-surface);
+  color: var(--pc-text);
+  text-align: left;
+  cursor: pointer;
+
+  &.active,
+  &:hover {
+    border-color: var(--pc-brand);
+    background: var(--pc-surface-accent);
+  }
+
+  h4 {
+    margin: 0;
+    font-size: 17px;
+  }
+
+  p {
+    margin: 8px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  span {
+    display: block;
+    margin-top: 8px;
+    color: var(--pc-text-secondary);
+    font-size: 12px;
+  }
+}
+
+.mcp-schema-panel {
+  height: 100%;
+  min-height: 0;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid var(--pc-border);
+  border-radius: 16px;
+  background: var(--pc-surface);
+
+  h3 {
+    margin: 0;
+    font-size: 17px;
+  }
+
+  p {
+    margin: 8px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  pre {
+    max-height: calc(100% - 64px);
+    margin: 14px 0 0;
+    padding: 14px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-radius: 12px;
+    background: #182230;
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+.mcp-dialog-options {
+  display: flex;
+  gap: 18px;
+}
+
+.full-width-button {
+  width: 100%;
+}
+</style>

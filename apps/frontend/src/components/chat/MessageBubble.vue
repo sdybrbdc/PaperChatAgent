@@ -52,3 +52,140 @@ async function handleCopy() {
     <div class="message-content markdown-body" v-html="renderedContent" />
   </article>
 </template>
+
+<style lang="scss" scoped>
+.message-bubble {
+  max-width: 82%;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+
+  &.user {
+    justify-self: end;
+    background: var(--pc-brand-soft);
+    border-color: transparent;
+  }
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.message-role {
+  margin-bottom: 8px;
+  color: var(--pc-brand);
+  font-size: 13px;
+  font-weight: 600;
+
+  .message-bubble.user & {
+    color: var(--pc-text-secondary);
+  }
+}
+
+.message-copy-button {
+  min-width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+}
+
+.message-tool-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.message-tool-item {
+  display: grid;
+  grid-template-columns: auto minmax(80px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--pc-border);
+  background: var(--pc-surface-soft);
+  color: var(--pc-text-secondary);
+  font-size: 13px;
+
+  &.failed {
+    background: var(--pc-danger-bg);
+    color: var(--pc-danger-text);
+  }
+
+  span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.message-tool-kind {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--pc-surface-accent);
+  color: var(--pc-brand);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.message-content {
+  font-size: 16px;
+  line-height: 1.6;
+
+  > :first-child {
+    margin-top: 0;
+  }
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+
+  pre {
+    overflow-x: auto;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #f8fafc;
+  }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  :not(pre) > code {
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  blockquote {
+    margin: 14px 0;
+    padding-left: 14px;
+    border-left: 3px solid var(--pc-border);
+    color: var(--pc-text-secondary);
+  }
+
+  ul,
+  ol {
+    padding-left: 22px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+    border: 1px solid var(--pc-border);
+    text-align: left;
+  }
+}
+</style>

@@ -129,3 +129,92 @@ onBeforeUnmount(() => {
     </section>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.module-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+
+  h2 {
+    margin: 0;
+    font-size: 28px;
+  }
+
+  p {
+    max-width: 640px;
+    margin: 8px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 15px;
+  }
+}
+
+.page-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.run-status-block {
+  display: grid;
+  grid-template-columns: auto 160px;
+  align-items: center;
+  gap: 12px;
+}
+
+.run-node-list {
+  display: grid;
+  gap: 14px;
+}
+
+.run-node-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--pc-border);
+  border-radius: 16px;
+  background: var(--pc-surface);
+
+  h4 {
+    margin: 0;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--pc-text-muted);
+  }
+}
+
+.run-sub-node-list {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--pc-border);
+}
+
+.run-sub-node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--pc-text-secondary);
+  font-size: 14px;
+}
+
+.agent-report-surface {
+  margin-top: 20px;
+}
+
+.agent-report-content {
+  padding: 20px;
+  border: 1px solid var(--pc-border);
+  border-radius: 16px;
+  background: var(--pc-surface);
+  line-height: 1.7;
+}
+</style>

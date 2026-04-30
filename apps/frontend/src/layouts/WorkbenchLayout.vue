@@ -26,3 +26,20 @@ watch(
     </main>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.workbench-layout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--pc-bg);
+}
+
+.main-area {
+  min-width: 0;
+  height: 100vh;
+  padding: 24px;
+  overflow: hidden;
+}
+</style>

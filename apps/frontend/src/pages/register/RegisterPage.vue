@@ -83,15 +83,74 @@ async function handleRegister() {
       <el-form-item label="确认密码" prop="confirmPassword">
         <el-input v-model="form.confirmPassword" type="password" show-password placeholder="再次输入密码" />
       </el-form-item>
-      <el-checkbox v-model="form.agreed" style="margin-bottom: 18px;">
+      <el-checkbox v-model="form.agreed" class="agreed-checkbox">
         我已阅读并同意服务条款、隐私政策以及论文资料处理说明。
       </el-checkbox>
-      <el-button type="primary" style="width: 100%;" @click="handleRegister">创建账号</el-button>
+      <el-button type="primary" class="submit-button" @click="handleRegister">创建账号</el-button>
     </el-form>
 
     <div class="form-footer-text">
       已有账号？
-      <router-link to="/login" style="color: var(--pc-brand); font-weight: 600;">返回登录</router-link>
+      <router-link to="/login" class="login-link">返回登录</router-link>
     </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.auth-brand-block {
+  h1 {
+    margin: 0;
+    font-size: 56px;
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  p {
+    max-width: 380px;
+    margin: 16px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 18px;
+  }
+}
+
+.form-card {
+  padding: 40px 48px;
+  border-radius: 28px;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  box-shadow: var(--pc-shadow);
+
+  h2 {
+    margin: 0;
+    font-size: 44px;
+    line-height: 1.08;
+  }
+
+  > p {
+    margin: 12px 0 28px;
+    color: var(--pc-text-muted);
+    font-size: 16px;
+  }
+}
+
+.agreed-checkbox {
+  margin-bottom: 18px;
+}
+
+.submit-button {
+  width: 100%;
+}
+
+.form-footer-text {
+  margin-top: 18px;
+  text-align: center;
+  color: var(--pc-text-secondary);
+  font-size: 15px;
+}
+
+.login-link {
+  color: var(--pc-brand);
+  font-weight: 600;
+}
+</style>

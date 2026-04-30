@@ -431,7 +431,99 @@ onMounted(loadDashboard)
   </div>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
+.module-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-shrink: 0;
+  margin-bottom: 20px;
+
+  h2 {
+    margin: 0;
+    font-size: 28px;
+  }
+
+  p {
+    max-width: 640px;
+    margin: 8px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 15px;
+  }
+}
+
+.page-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.metric-card {
+  padding: 18px;
+  border-radius: 18px;
+
+  h4 {
+    margin: 0;
+    color: var(--pc-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 42px;
+    font-weight: 600;
+  }
+
+  &.warning {
+    background: var(--pc-warning-bg);
+    strong { color: var(--pc-warning-text); }
+  }
+
+  &.brand {
+    background: var(--pc-brand-soft);
+    strong { color: var(--pc-brand); }
+  }
+
+  &.success {
+    background: var(--pc-success-bg);
+    strong { color: var(--pc-success-text); }
+  }
+
+  &.danger {
+    background: var(--pc-danger-bg);
+    strong { color: var(--pc-danger-text); }
+  }
+}
+
+.module-chart-bar {
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  gap: 10px;
+  height: 300px;
+}
+
+.module-chart-column {
+  width: 56px;
+  min-height: 48px;
+  border-radius: 14px 14px 8px 8px;
+  background: var(--pc-brand);
+
+  &.soft { background: var(--pc-brand-soft); }
+  &.success { background: var(--pc-success-bg); }
+  &.warning { background: var(--pc-warning-bg); }
+}
+
+.module-chart-label {
+  display: grid;
+  gap: 2px;
+  color: var(--pc-text-muted);
+  text-align: center;
+  font-size: 14px;
+}
+
 .dashboard-shell {
   background: #f8fafd;
 }

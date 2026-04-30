@@ -84,3 +84,105 @@ const emit = defineEmits<{
     </div>
   </aside>
 </template>
+
+<style lang="scss" scoped>
+.guidance-panel {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--pc-surface-soft);
+  border: 1px solid var(--pc-border);
+  border-radius: 22px;
+  padding: 20px;
+}
+
+.guidance-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.guidance-panel-headline {
+  margin-bottom: 18px;
+  color: var(--pc-text-secondary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.guidance-section {
+  padding: 0 0 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--pc-border);
+
+  &:last-child {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  h3 {
+    margin: 0 0 10px;
+    font-size: 16px;
+  }
+
+  p,
+  li,
+  span,
+  strong {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--pc-text-secondary);
+  }
+
+  &--warning h3 {
+    color: var(--pc-warning-text);
+  }
+
+  &--draft {
+    background: rgba(37, 99, 235, 0.04);
+    border: 1px solid var(--pc-border);
+    border-radius: 16px;
+    padding: 16px;
+  }
+}
+
+.guidance-kv {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.guidance-kv-block {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.guidance-kv strong,
+.guidance-kv-block strong {
+  color: var(--pc-text);
+}
+
+.guidance-error {
+  color: var(--pc-danger-text);
+  margin: 0 0 12px;
+}
+
+.guidance-panel-footer {
+  flex-shrink: 0;
+  padding-top: 16px;
+}
+
+.guidance-draft-button {
+  width: 100%;
+}
+</style>

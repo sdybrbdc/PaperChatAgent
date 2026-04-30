@@ -66,17 +66,90 @@ async function handleLogin() {
       <el-form-item label="密码" prop="password">
         <el-input v-model="form.password" type="password" show-password placeholder="请输入密码" />
       </el-form-item>
-      <div style="display: flex; justify-content: space-between; margin-bottom: 18px; color: var(--pc-text-secondary); font-size: 14px;">
+      <div class="form-actions">
         <span>记住我</span>
-        <span style="color: var(--pc-brand);">忘记密码？</span>
+        <span class="forgot-link">忘记密码？</span>
       </div>
-      <el-button type="primary" :loading="loading" style="width: 100%;" @click="handleLogin">登录</el-button>
+      <el-button type="primary" :loading="loading" class="submit-button" @click="handleLogin">登录</el-button>
     </el-form>
 
     <div class="form-footer-text">
       还没有账号？
-      <router-link to="/register" style="color: var(--pc-brand); font-weight: 600;">立即注册</router-link>
+      <router-link to="/register" class="register-link">立即注册</router-link>
     </div>
     <div class="terms-text">登录即表示你同意平台的服务条款与隐私说明。</div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.auth-brand-block {
+  h1 {
+    margin: 0;
+    font-size: 56px;
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  p {
+    max-width: 380px;
+    margin: 16px 0 0;
+    color: var(--pc-text-muted);
+    font-size: 18px;
+  }
+}
+
+.form-card {
+  padding: 40px 48px;
+  border-radius: 28px;
+  background: var(--pc-surface);
+  border: 1px solid var(--pc-border);
+  box-shadow: var(--pc-shadow);
+
+  h2 {
+    margin: 0;
+    font-size: 44px;
+    line-height: 1.08;
+  }
+
+  > p {
+    margin: 12px 0 28px;
+    color: var(--pc-text-muted);
+    font-size: 16px;
+  }
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  color: var(--pc-text-secondary);
+  font-size: 14px;
+}
+
+.forgot-link {
+  color: var(--pc-brand);
+}
+
+.submit-button {
+  width: 100%;
+}
+
+.form-footer-text {
+  margin-top: 18px;
+  text-align: center;
+  color: var(--pc-text-secondary);
+  font-size: 15px;
+}
+
+.register-link {
+  color: var(--pc-brand);
+  font-weight: 600;
+}
+
+.terms-text {
+  margin-top: 16px;
+  color: var(--pc-text-muted);
+  font-size: 13px;
+}
+</style>
